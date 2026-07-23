@@ -25,7 +25,10 @@ SECRET_KEY = 'django-insecure-34x%8&u%=rwbk-o17-7z3&*hnsfkxldz4%bq@ve3sy%0mgtpa=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+]
 
 
 # Application definition
@@ -39,12 +42,15 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'core',
-    'user'
+    'user',
+    'corsheaders',
+
 ]
 
 AUTH_USER_MODEL = 'user.User'  # Assuming your app is named 'user' and model is 'User'
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # ← must be FIRST
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -163,3 +169,9 @@ CACHES = {
         }
     }
 }
+
+# CORS — allow the Expo web frontend to call this API
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:8081',
+    'http://127.0.0.1:8081',
+]
