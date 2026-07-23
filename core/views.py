@@ -1,6 +1,9 @@
+from django.core.cache import cache
+from django_redis import get_redis_connection
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core.models import Group, UserGroup, Expense
@@ -15,6 +18,10 @@ from user.models import User
 class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Group.objects.filter(usergroup__user_id=self.request.user.pk)
 
     def post(self, request, *args, **kwargs):
         serializer = GroupSerializer(data=request.data)
@@ -24,15 +31,20 @@ class GroupViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['delete'],url_name='delete')
     def delete_group(self,request,pk=None):
-        delete_group = Group.objects.get(pk=pk)
-        if delete_group:
-            delete_group.delete()
+        delete_group = self.get_queryset().filter(pk=pk).first()
+        if not delete_group:
+            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        delete_group.delete()
         return Response({"detail": "Group and its associate records have been deleted."},status=status.HTTP_204_NO_CONTENT)
 
 
 class UserGroupViewSet(viewsets.ModelViewSet):
     queryset = UserGroup.objects.all()
     serializer_class = UserGroupSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return UserGroup.objects.filter(user_id=self.request.user.pk)
 
     def post(self, request, *args, **kwargs):
         serializer = UserGroupSerializer(data=request.data)
@@ -42,6 +54,8 @@ class UserGroupViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path="users")
     def get_group_users(self, request, pk=None):
+        if not self.get_queryset().filter(group_id=pk).exists():
+            return Response({'detail': 'Not permitted.'}, status=status.HTTP_403_FORBIDDEN)
         user_groups = UserGroup.objects.filter(group_id=pk).values('user_id')
 
         if not user_groups.exists():
@@ -59,6 +73,38 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        return Expense.objects.filter(group_id__usergroup__user_id=self.request.user.pk)
+
+
+    def list(self, request, *args, **kwargs):
+        # Never share cached expense data between authenticated users.
+        cache_key = f"expense-data-user-{request.user.pk}"
+
+        # Test Redis directly
+        redis_conn = get_redis_connection("default")
+        try:
+            pong = redis_conn.ping()
+            print("✅ Redis is connected:", pong)
+        except Exception as e:
+            print("❌ Redis connection failed:", e)
+
+        # Measure cache access time
+        import time
+        start = time.perf_counter()
+        cached_data = cache.get(cache_key)
+        end = time.perf_counter()
+        print(f"Cache get time: {(end - start) * 1000:.4f} ms")
+
+        if cached_data:
+            return Response(cached_data, status=status.HTTP_200_OK)
+
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        serialized_data = serializer.data
+        cache.set(cache_key, serialized_data, timeout=60 * 60 * 24)
+        return Response(serialized_data, status=status.HTTP_200_OK)
+
     def post(self, request, *args, **kwargs):
         serializer = ExpenseSerializer(data=request.data)
         if serializer.is_valid():
@@ -67,6 +113,8 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path="settlements")
     def get_settlements(self, request, pk=None):
+        if not UserGroup.objects.filter(group_id=pk, user_id=request.user.pk).exists():
+            return Response({'detail': 'Not permitted.'}, status=status.HTTP_403_FORBIDDEN)
         expenses = Expense.objects.filter(group_id=pk).values().all()
         if not expenses.exists():
             return Response({"detail": "No expense found for this group."}, status=status.HTTP_404_NOT_FOUND)
