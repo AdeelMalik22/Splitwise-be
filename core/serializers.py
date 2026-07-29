@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from core.models import Group, UserGroup, Expense
+from core.models import Group, UserGroup, Expense, ExpenseParticipant
 
 
 class GroupSerializer(serializers.ModelSerializer):
@@ -20,9 +20,46 @@ class UserGroupSerializer(serializers.ModelSerializer):
 
 
 class ExpenseSerializer(serializers.ModelSerializer):
+    paid_by = serializers.ListField(child=serializers.IntegerField(), write_only=True)
+    split_on = serializers.ListField(child=serializers.IntegerField(), write_only=True)
+
     class Meta:
         model = Expense
-        fields = '__all__'
+        fields = ('id', 'name', 'description', 'amount', 'paid_by', 'split_on',
+                  'group_id', 'created_at', 'updated_at')
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        participants = instance.participants.all()
+        data['paid_by'] = [p.user_id for p in participants if p.role == ExpenseParticipant.PAID]
+        data['split_on'] = [p.user_id for p in participants if p.role == ExpenseParticipant.SPLIT]
+        return data
+
+    def create(self, validated_data):
+        paid_by = validated_data.pop('paid_by')
+        split_on = validated_data.pop('split_on')
+        expense = Expense.objects.create(**validated_data)
+        ExpenseParticipant.objects.bulk_create(
+            [ExpenseParticipant(expense=expense, user_id=user_id, role=role)
+             for role, user_ids in ((ExpenseParticipant.PAID, paid_by),
+                                    (ExpenseParticipant.SPLIT, split_on))
+             for user_id in user_ids]
+        )
+        return expense
+
+    def update(self, instance, validated_data):
+        paid_by = validated_data.pop('paid_by', None)
+        split_on = validated_data.pop('split_on', None)
+        instance = super().update(instance, validated_data)
+        for role, user_ids in ((ExpenseParticipant.PAID, paid_by),
+                               (ExpenseParticipant.SPLIT, split_on)):
+            if user_ids is not None:
+                instance.participants.filter(role=role).delete()
+                ExpenseParticipant.objects.bulk_create(
+                    [ExpenseParticipant(expense=instance, user_id=user_id, role=role)
+                     for user_id in user_ids]
+                )
+        return instance
 
     def validate(self, attrs):
         amount = attrs.get('amount', getattr(self.instance, 'amount', None))

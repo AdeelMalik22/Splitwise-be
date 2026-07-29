@@ -1,4 +1,3 @@
-from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
 from user.models import User
@@ -37,8 +36,6 @@ class Expense(models.Model):
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    paid_by = ArrayField(models.IntegerField())
-    split_on = ArrayField(models.IntegerField())
     group_id = models.ForeignKey(Group, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -48,5 +45,23 @@ class Expense(models.Model):
             models.CheckConstraint(
                 condition=models.Q(amount__gt=0),
                 name='expense_amount_positive',
+            ),
+        ]
+
+
+class ExpenseParticipant(models.Model):
+    PAID = 'paid'
+    SPLIT = 'split'
+    ROLE_CHOICES = ((PAID, 'Paid by'), (SPLIT, 'Split with'))
+
+    expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name='participants')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    role = models.CharField(max_length=5, choices=ROLE_CHOICES)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['expense', 'user', 'role'],
+                name='unique_expense_participant_role',
             ),
         ]

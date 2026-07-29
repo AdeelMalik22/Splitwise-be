@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from core.models import Group, UserGroup, Expense
+from core.models import Group, UserGroup, Expense, ExpenseParticipant
 from core.serializers import GroupSerializer, UserGroupSerializer, ExpenseSerializer
 from core.settlements import get_settlements_for_group
 from user.models import User
@@ -105,8 +105,16 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     def get_settlements(self, request, pk=None):
         if not UserGroup.objects.filter(group_id=pk, user_id=request.user.pk).exists():
             return Response({'detail': 'Not permitted.'}, status=status.HTTP_403_FORBIDDEN)
-        expenses = Expense.objects.filter(group_id=pk).values().all()
-        if not expenses.exists():
+        expenses = list(Expense.objects.filter(group_id=pk).prefetch_related('participants'))
+        if not expenses:
             return Response({"detail": "No expense found for this group."}, status=status.HTTP_404_NOT_FOUND)
-        settlements = get_settlements_for_group(expenses, request.user.id)
+        expense_data = []
+        for expense in expenses:
+            participants = expense.participants.all()
+            expense_data.append({
+                'amount': expense.amount,
+                'paid_by': [p.user_id for p in participants if p.role == ExpenseParticipant.PAID],
+                'split_on': [p.user_id for p in participants if p.role == ExpenseParticipant.SPLIT],
+            })
+        settlements = get_settlements_for_group(expense_data, request.user.id)
         return Response(settlements,status.HTTP_200_OK)

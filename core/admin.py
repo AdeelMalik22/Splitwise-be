@@ -16,4 +16,4 @@ class GroupAdmin(admin.ModelAdmin):
 
 @admin.register(Expense)
 class ExpenseAdmin(admin.ModelAdmin):
-    list_display = ["name","description","paid_by","split_on","group_id_id"]
+    list_display = ["name", "description", "amount", "group_id_id", "created_at"]
