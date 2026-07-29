@@ -25,6 +25,9 @@ class ExpenseSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def validate(self, attrs):
+        amount = attrs.get('amount', getattr(self.instance, 'amount', None))
+        if amount is not None and amount <= 0:
+            raise serializers.ValidationError({'amount': 'Amount must be greater than zero.'})
         request = self.context.get('request')
         group = attrs.get('group_id', self.instance.group_id if self.instance else None)
         if request and group and not UserGroup.objects.filter(

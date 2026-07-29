@@ -22,6 +22,14 @@ class UserGroup(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user_id', 'group_id'],
+                name='unique_user_group_membership',
+            ),
+        ]
+
 
 
 class Expense(models.Model):
@@ -35,4 +43,11 @@ class Expense(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name='expense_amount_positive',
+            ),
+        ]
 
