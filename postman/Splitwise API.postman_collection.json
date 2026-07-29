@@ -1,0 +1,115 @@
+{
+  "info": {
+    "name": "Splitwise API",
+    "_postman_id": "8f0b7a9d-2c1a-4e0e-9f7a-1d2c3b4a5e6f",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Frontend-ready collection for the Splitwise Django REST API. Run Register, Login, Create group, Add membership, then Create expense in order."
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "username", "value": "alice" },
+    { "key": "email", "value": "alice@example.com" },
+    { "key": "password", "value": "strong-password-123" },
+    { "key": "access_token", "value": "" },
+    { "key": "refresh_token", "value": "" },
+    { "key": "user_id", "value": "1" },
+    { "key": "member_user_id", "value": "2" },
+    { "key": "group_id", "value": "1" },
+    { "key": "expense_id", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": { "method": "GET", "url": "{{base_url}}/health/" }
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"name\": \"Alice\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}" },
+            "url": "{{base_url}}/users/register/"
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) {", "  pm.collectionVariables.set('user_id', pm.response.json().id);", "}"] } }]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}" },
+            "url": "{{base_url}}/login/"
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["const data = pm.response.json();", "pm.collectionVariables.set('access_token', data.access);", "pm.collectionVariables.set('refresh_token', data.refresh);"] } }]
+        },
+        {
+          "name": "Refresh token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}" },
+            "url": "{{base_url}}/login/refresh/"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        { "name": "My profile", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/users/{{user_id}}/" } },
+        { "name": "My groups", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/users/{{user_id}}/groups/" } }
+      ]
+    },
+    {
+      "name": "Groups and memberships",
+      "item": [
+        {
+          "name": "Create group",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Weekend trip\",\n  \"description\": \"Shared travel expenses\"\n}" },
+            "url": "{{base_url}}/groups/"
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) { pm.collectionVariables.set('group_id', pm.response.json().id); }"] } }]
+        },
+        { "name": "List groups", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/groups/" } },
+        {
+          "name": "List my memberships",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/usersgroup/" }
+        },
+        {
+          "name": "Add my membership",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"user_id\": {{user_id}},\n  \"group_id\": {{group_id}}\n}" },
+            "url": "{{base_url}}/usersgroup/"
+          }
+        },
+        { "name": "Group users", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/usersgroup/{{group_id}}/users/" } }
+      ]
+    },
+    {
+      "name": "Expenses and settlements",
+      "item": [
+        {
+          "name": "Create expense",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Dinner\",\n  \"description\": \"Shared dinner\",\n  \"amount\": \"120.00\",\n  \"paid_by\": [{{user_id}}],\n  \"split_on\": [{{user_id}}],\n  \"group_id\": {{group_id}}\n}" },
+            "url": "{{base_url}}/expense/"
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) { pm.collectionVariables.set('expense_id', pm.response.json().id); }"] } }]
+        },
+        { "name": "List expenses", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/expense/" } },
+        { "name": "Get expense", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/expense/{{expense_id}}/" } },
+        { "name": "Settlements", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/expense/{{group_id}}/settlements/" } }
+      ]
+    }
+  ]
+}
