@@ -65,3 +65,20 @@ class ExpenseParticipant(models.Model):
                 name='unique_expense_participant_role',
             ),
         ]
+
+
+class Payment(models.Model):
+    PENDING = 'pending'
+    COMPLETED = 'completed'
+    STATUS_CHOICES = ((PENDING, 'Pending'), (COMPLETED, 'Completed'))
+
+    expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name='payments')
+    payer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments_made')
+    payee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments_received')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ('-created_at',)

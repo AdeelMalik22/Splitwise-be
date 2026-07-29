@@ -5,7 +5,9 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from core.models import Group, UserGroup, Expense, ExpenseParticipant
+from core.models import Group, UserGroup, Expense, ExpenseParticipant, Payment
+from core.payment_serializers import PaymentSerializer
+from django.utils import timezone
 from core.serializers import GroupSerializer, UserGroupSerializer, ExpenseSerializer
 from core.settlements import get_settlements_for_group
 from user.models import User
@@ -118,3 +120,19 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             })
         settlements = get_settlements_for_group(expense_data, request.user.id)
         return Response(settlements,status.HTTP_200_OK)
+
+
+class PaymentViewSet(viewsets.ModelViewSet):
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Payment.objects.filter(
+            expense__group_id__usergroup__user_id=self.request.user.pk
+        ).select_related('expense', 'payer', 'payee')
+
+    def perform_update(self, serializer):
+        payment = serializer.save()
+        if payment.status == Payment.COMPLETED and payment.completed_at is None:
+            payment.completed_at = timezone.now()
+            payment.save(update_fields=('completed_at',))
