@@ -7,9 +7,9 @@
   },
   "variable": [
     { "key": "base_url", "value": "http://127.0.0.1:8000" },
-    { "key": "username", "value": "alice" },
-    { "key": "email", "value": "alice@example.com" },
-    { "key": "password", "value": "strong-password-123" },
+    { "key": "username", "value": "umer" },
+    { "key": "email", "value": "umer@example.com" },
+    { "key": "password", "value": "SplitwiseDemo!2026" },
     { "key": "access_token", "value": "" },
     { "key": "refresh_token", "value": "" },
     { "key": "user_id", "value": "1" },
