@@ -38,3 +38,8 @@ staticfiles/
 # OS files
 .DS_Store
 Thumbs.db
+__pycache__/
+*.py[cod]
+.venv/
+*.sqlite3
+.env

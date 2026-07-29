@@ -124,6 +124,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
                 'amount': expense.amount,
                 'paid_by': [p.user_id for p in participants if p.role == ExpenseParticipant.PAID],
                 'split_on': [p.user_id for p in participants if p.role == ExpenseParticipant.SPLIT],
+                'split_details': [p for p in participants if p.role == ExpenseParticipant.SPLIT],
             })
         settlements = get_settlements_for_group(expense_data, request.user.id)
         return Response(settlements,status.HTTP_200_OK)
