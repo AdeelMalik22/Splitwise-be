@@ -13,14 +13,13 @@ A Django REST Framework backend for managing users, groups, shared expenses, and
 
 ## Requirements
 
-Install the dependencies listed in `requirement.txt`. The current project also requires the packages used by its configuration:
+Install the dependencies listed in `requirement.txt`:
 
 ```bash
 pip install -r requirement.txt
-pip install djangorestframework djangorestframework-simplejwt psycopg2-binary django-redis redis
 ```
 
-PostgreSQL must be available using the database settings in `splitwise/settings.py`. Redis is required by the expense-list cache configuration.
+PostgreSQL and Redis must be available. Copy `.env.example` to `.env` and provide deployment-specific values through the process environment. The settings module does not load `.env` files automatically.
 
 ## Run locally
 
