@@ -1,4 +1,5 @@
 from collections import defaultdict
+from decimal import Decimal, ROUND_HALF_UP
 
 from user.models import User
 
@@ -9,7 +10,7 @@ def get_username(uid):
 
 
 def get_settlements_for_group(expenses, user_id):
-    balance = defaultdict(float)
+    balance = defaultdict(Decimal)
 
     for expense in expenses:
         total_amount = expense.get("amount")
@@ -22,7 +23,7 @@ def get_settlements_for_group(expenses, user_id):
         num_payers = len(payers)
         num_splitters = len(splitters)
 
-        owed_share = total_amount / num_splitters
+        owed_share = Decimal(str(total_amount)) / num_splitters
 
         for splitter in splitters:
             for payer in payers:
@@ -41,7 +42,7 @@ def get_settlements_for_group(expenses, user_id):
     }
 
     for uid, net_amount in balance.items():
-        rounded_amount = round(abs(net_amount), 2)
+        rounded_amount = abs(net_amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         username = get_username(uid)
 
         if net_amount < 0:

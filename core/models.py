@@ -36,7 +36,7 @@ class Expense(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=255)
-    amount = models.FloatField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
     paid_by = ArrayField(models.IntegerField())
     split_on = ArrayField(models.IntegerField())
     group_id = models.ForeignKey(Group, on_delete=models.CASCADE)
@@ -50,4 +50,3 @@ class Expense(models.Model):
                 name='expense_amount_positive',
             ),
         ]
-
