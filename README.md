@@ -120,4 +120,4 @@ and tests in GitHub Actions against PostgreSQL and Redis.
 
 ## Remaining domain work
 
-The deployment settings, environment configuration, rate limiting, health endpoint, participant validation, and CI checks are in place. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the production runbook. The main remaining domain-level improvement is replacing array-based expense participants with relational data and expanding integration tests around all API workflows.
+The deployment settings, environment configuration, rate limiting, health endpoint, participant validation, relational expense participants, and CI checks are in place. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the production runbook. Remaining work is expanding integration tests around all API workflows and completing the production deployment configuration.
