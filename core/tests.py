@@ -36,14 +36,19 @@ class SettlementTests(SimpleTestCase):
 
 class GroupOwnershipTests(SimpleTestCase):
     @patch('core.views.UserGroup.objects.get_or_create')
-    def test_group_creation_adds_creator_to_group(self, get_or_create):
-        serializer = type('Serializer', (), {'save': lambda self: 'group'})()
+    @patch('core.views.Activity.objects.create')
+    def test_group_creation_adds_creator_to_group(self, create_activity, get_or_create):
+        group = type('Group', (), {'pk': 1})()
+        serializer = type('Serializer', (), {'save': lambda self: group})()
         view = GroupViewSet()
         view.request = type('Request', (), {'user': 'user'})()
 
         view.perform_create(serializer)
 
-        get_or_create.assert_called_once_with(user_id='user', group_id='group')
+        get_or_create.assert_called_once_with(user_id='user', group_id=group)
+        create_activity.assert_called_once_with(
+            actor='user', action='created', entity_type='group', entity_id=1
+        )
 
 
 class ExpenseWorkflowIntegrationTests(APITestCase):

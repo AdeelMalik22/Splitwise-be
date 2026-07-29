@@ -5,9 +5,10 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from core.models import Group, UserGroup, Expense, ExpenseParticipant, Payment, Notification
+from core.models import Group, UserGroup, Expense, ExpenseParticipant, Payment, Notification, Activity
 from core.payment_serializers import PaymentSerializer
 from core.notification_serializers import NotificationSerializer
+from core.activity_serializers import ActivitySerializer
 from django.utils import timezone
 from core.serializers import GroupSerializer, UserGroupSerializer, ExpenseSerializer
 from core.settlements import get_settlements_for_group
@@ -28,6 +29,7 @@ class GroupViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         group = serializer.save()
         UserGroup.objects.get_or_create(user_id=self.request.user, group_id=group)
+        Activity.objects.create(actor=self.request.user, action='created', entity_type='group', entity_id=group.pk)
 
     def post(self, request, *args, **kwargs):
         serializer = GroupSerializer(data=request.data)
@@ -82,6 +84,10 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Expense.objects.filter(group_id__usergroup__user_id=self.request.user.pk)
 
+    def perform_create(self, serializer):
+        expense = serializer.save()
+        Activity.objects.create(actor=self.request.user, action='created', entity_type='expense', entity_id=expense.pk)
+
 
     def list(self, request, *args, **kwargs):
         # Never share cached expense data between authenticated users.
@@ -132,6 +138,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
             expense__group_id__usergroup__user_id=self.request.user.pk
         ).select_related('expense', 'payer', 'payee')
 
+    def perform_create(self, serializer):
+        payment = serializer.save()
+        Activity.objects.create(actor=self.request.user, action='created', entity_type='payment', entity_id=payment.pk)
+
     def perform_update(self, serializer):
         payment = serializer.save()
         if payment.status == Payment.COMPLETED and payment.completed_at is None:
@@ -153,3 +163,11 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             notification.read_at = timezone.now()
             notification.save(update_fields=('read_at',))
         return Response(self.get_serializer(notification).data)
+
+
+class ActivityViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ActivitySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Activity.objects.filter(actor=self.request.user)
