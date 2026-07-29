@@ -19,7 +19,7 @@ Install the dependencies listed in `requirement.txt`:
 pip install -r requirement.txt
 ```
 
-PostgreSQL must be available. Local development uses Django's in-memory cache unless `REDIS_URL` is set; deployments should provide Redis through `REDIS_URL`. Copy `.env.example` to your environment and export the values; the settings module does not load `.env` files automatically.
+PostgreSQL must be available. Local development uses Django's in-memory cache unless `REDIS_URL` is set; deployments should provide Redis through `REDIS_URL`. Use `.env.example` as a template and export the values; the settings module does not load `.env` files automatically.
 
 ## Run locally
 
@@ -29,6 +29,16 @@ python manage.py runserver
 ```
 
 The API is available at `http://127.0.0.1:8000`.
+
+Run validation locally with:
+
+```bash
+python manage.py check
+python manage.py test
+```
+
+The unauthenticated readiness endpoint is `GET /health/`. It returns `200`
+when PostgreSQL and the configured cache are available, otherwise `503`.
 
 ## Authentication
 
@@ -77,6 +87,7 @@ Use the returned `access` token for protected requests. Refresh it with `POST /l
 | GET | `/expense/{group_id}/settlements/` | Calculate group settlements |
 | GET | `/users/{id}/groups/` | List groups for your own user ID |
 | GET | `/usersgroup/{group_id}/users/` | List users in one of your groups |
+| GET | `/health/` | Check database and cache readiness |
 
 The exact expense payload uses `amount`, `paid_by`, `split_on`, and `group_id`, for example:
 
@@ -96,6 +107,16 @@ The exact expense payload uses `amount`, `paid_by`, `split_on`, and `group_id`, 
 Import [`postman/Splitwise API.postman_collection.json`](postman/Splitwise%20API.postman_collection.json) into Postman. Set the collection variable `base_url` if the server is not running at `http://127.0.0.1:8000`.
 
 The login request stores the returned access and refresh tokens automatically for subsequent requests.
+
+## Configuration and deployment
+
+The settings are configured through environment variables. `.env.example`
+contains the available variables and safe local defaults. Production setup,
+including HTTPS, Redis, migrations, static files, and health verification, is
+documented in [`DEPLOYMENT.md`](DEPLOYMENT.md).
+
+Every push to `main` and every pull request runs the Django checks, migrations,
+and tests in GitHub Actions against PostgreSQL and Redis.
 
 ## Remaining domain work
 
