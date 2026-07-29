@@ -14,6 +14,7 @@
     { "key": "refresh_token", "value": "" },
     { "key": "user_id", "value": "1" },
     { "key": "member_user_id", "value": "2" },
+    { "key": "membership_id", "value": "1" },
     { "key": "group_id", "value": "1" },
     { "key": "expense_id", "value": "1" }
   ],
@@ -76,6 +77,19 @@
           },
           "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) { pm.collectionVariables.set('group_id', pm.response.json().id); }"] } }]
         },
+        {
+          "name": "Update group",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated trip name\",\n  \"description\": \"Updated description\"\n}" },
+            "url": "{{base_url}}/groups/{{group_id}}/"
+          }
+        },
+        {
+          "name": "Delete group",
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/groups/{{group_id}}/" }
+        },
         { "name": "List groups", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/groups/" } },
         {
           "name": "List my memberships",
@@ -88,9 +102,15 @@
             "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "raw", "raw": "{\n  \"user_id\": {{user_id}},\n  \"group_id\": {{group_id}}\n}" },
             "url": "{{base_url}}/usersgroup/"
-          }
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) { pm.collectionVariables.set('membership_id', pm.response.json().id); }"] } }]
         },
         { "name": "Group users", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/usersgroup/{{group_id}}/users/" } }
+        ,
+        {
+          "name": "Remove membership",
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/usersgroup/{{membership_id}}/" }
+        }
       ]
     },
     {
@@ -108,6 +128,16 @@
         },
         { "name": "List expenses", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/expense/" } },
         { "name": "Get expense", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/expense/{{expense_id}}/" } },
+        {
+          "name": "Update expense",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"description\": \"Updated description\",\n  \"amount\": \"125.00\"\n}" },
+            "url": "{{base_url}}/expense/{{expense_id}}/"
+          }
+        },
+        { "name": "Delete expense", "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/expense/{{expense_id}}/" } },
         { "name": "Settlements", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/expense/{{group_id}}/settlements/" } }
       ]
     }
