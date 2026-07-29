@@ -23,13 +23,21 @@ def get_settlements_for_group(expenses, user_id):
         num_payers = len(payers)
         num_splitters = len(splitters)
 
-        owed_share = Decimal(str(total_amount)) / num_splitters
+        details = expense.get('split_details') or []
+        shares = {item.user_id: item.share_amount for item in details if item.share_amount is not None}
+        percentages = {item.user_id: item.share_percentage for item in details if item.share_percentage is not None}
+        if shares:
+            owed_share_for = lambda uid: Decimal(str(shares.get(uid, 0)))
+        elif percentages:
+            owed_share_for = lambda uid: Decimal(str(total_amount)) * Decimal(str(percentages.get(uid, 0))) / 100
+        else:
+            owed_share_for = lambda uid: Decimal(str(total_amount)) / num_splitters
 
         for splitter in splitters:
             for payer in payers:
                 if splitter == payer:
                     continue
-                split_amount = owed_share / num_payers
+                split_amount = owed_share_for(splitter) / num_payers
 
                 if splitter == user_id:
                     balance[payer] -= split_amount  # user owes others

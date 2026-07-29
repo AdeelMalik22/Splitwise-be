@@ -115,3 +115,19 @@ class ExpenseWorkflowIntegrationTests(APITestCase):
             'group_id': group.pk,
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_expense_supports_unequal_amount_split(self):
+        group = Group.objects.create(name='Trip', description='Shared trip')
+        UserGroup.objects.create(user_id=self.owner, group_id=group)
+        UserGroup.objects.create(user_id=self.member, group_id=group)
+        response = self.client.post('/expense/', {
+            'name': 'Hotel', 'description': 'Unequal split', 'amount': '100.00',
+            'paid_by': [self.owner.pk],
+            'split_details': [
+                {'user_id': self.owner.pk, 'amount': '70.00'},
+                {'user_id': self.member.pk, 'amount': '30.00'},
+            ],
+            'group_id': group.pk,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(response.data['split_details']), 2)

@@ -57,6 +57,8 @@ class ExpenseParticipant(models.Model):
     expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name='participants')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     role = models.CharField(max_length=5, choices=ROLE_CHOICES)
+    share_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    share_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
 
     class Meta:
         constraints = [
