@@ -99,4 +99,4 @@ The login request stores the returned access and refresh tokens automatically fo
 
 ## Remaining domain work
 
-The deployment settings, environment configuration, rate limiting, health endpoint, and participant validation are in place. The main remaining domain-level improvement is replacing array-based expense participants with relational data and expanding integration tests around all API workflows.
+The deployment settings, environment configuration, rate limiting, health endpoint, participant validation, and CI checks are in place. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the production runbook. The main remaining domain-level improvement is replacing array-based expense participants with relational data and expanding integration tests around all API workflows.
