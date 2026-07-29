@@ -97,6 +97,6 @@ Import [`postman/Splitwise API.postman_collection.json`](postman/Splitwise%20API
 
 The login request stores the returned access and refresh tokens automatically for subsequent requests.
 
-## Important production work remaining
+## Remaining domain work
 
-Before production deployment, move secrets and database credentials to environment variables, set `DEBUG = False`, configure `ALLOWED_HOSTS`, use HTTPS, add rate limiting and comprehensive tests, and replace array-based expense participants with validated relational data.
+The deployment settings, environment configuration, rate limiting, health endpoint, and participant validation are in place. The main remaining domain-level improvement is replacing array-based expense participants with relational data and expanding integration tests around all API workflows.
