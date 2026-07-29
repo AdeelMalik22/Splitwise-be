@@ -22,6 +22,10 @@ class GroupViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Group.objects.filter(usergroup__user_id=self.request.user.pk)
 
+    def perform_create(self, serializer):
+        group = serializer.save()
+        UserGroup.objects.get_or_create(user_id=self.request.user, group_id=group)
+
     def post(self, request, *args, **kwargs):
         serializer = GroupSerializer(data=request.data)
         if serializer.is_valid():

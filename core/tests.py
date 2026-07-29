@@ -3,6 +3,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from core.settlements import get_settlements_for_group
+from core.views import GroupViewSet
 
 
 class SettlementTests(SimpleTestCase):
@@ -27,3 +28,15 @@ class SettlementTests(SimpleTestCase):
         ], user_id=1)
 
         self.assertEqual(result, {'You need to pay': [], 'you will get': []})
+
+
+class GroupOwnershipTests(SimpleTestCase):
+    @patch('core.views.UserGroup.objects.get_or_create')
+    def test_group_creation_adds_creator_to_group(self, get_or_create):
+        serializer = type('Serializer', (), {'save': lambda self: 'group'})()
+        view = GroupViewSet()
+        view.request = type('Request', (), {'user': 'user'})()
+
+        view.perform_create(serializer)
+
+        get_or_create.assert_called_once_with(user_id='user', group_id='group')
