@@ -30,6 +30,20 @@ python manage.py runserver
 
 The API is available at `http://127.0.0.1:8000`.
 
+### Load realistic demo data
+
+After running migrations, load 20 users, overlapping groups, expenses,
+participants, payments, invites, notifications, and activity records:
+
+```bash
+python manage.py seed_demo_data
+```
+
+The command is safe to run repeatedly. Add `--reset` only when you want to
+delete the demo users and their related records first. Every demo user uses
+the password `SplitwiseDemo!2026`; usernames and names are listed in the
+collection and include Umer, Adeel, Saim, Fatima, and Hamza.
+
 Run validation locally with:
 
 ```bash
