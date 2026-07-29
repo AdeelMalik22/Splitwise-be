@@ -19,7 +19,7 @@ Install the dependencies listed in `requirement.txt`:
 pip install -r requirement.txt
 ```
 
-PostgreSQL and Redis must be available. Copy `.env.example` to `.env` and provide deployment-specific values through the process environment. The settings module does not load `.env` files automatically.
+PostgreSQL must be available. Local development uses Django's in-memory cache unless `REDIS_URL` is set; deployments should provide Redis through `REDIS_URL`. Copy `.env.example` to your environment and export the values; the settings module does not load `.env` files automatically.
 
 ## Run locally
 
