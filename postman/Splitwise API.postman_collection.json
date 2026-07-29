@@ -15,6 +15,9 @@
     { "key": "user_id", "value": "1" },
     { "key": "member_user_id", "value": "2" },
     { "key": "membership_id", "value": "1" },
+    { "key": "payment_id", "value": "1" },
+    { "key": "invite_id", "value": "1" },
+    { "key": "notification_id", "value": "1" },
     { "key": "group_id", "value": "1" },
     { "key": "expense_id", "value": "1" }
   ],
@@ -139,6 +142,41 @@
         },
         { "name": "Delete expense", "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/expense/{{expense_id}}/" } },
         { "name": "Settlements", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/expense/{{group_id}}/settlements/" } }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Create payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"expense\": {{expense_id}},\n  \"payer\": {{user_id}},\n  \"payee\": {{member_user_id}},\n  \"amount\": \"50.00\"\n}" },
+            "url": "{{base_url}}/payments/"
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) { pm.collectionVariables.set('payment_id', pm.response.json().id); }"] } }]
+        },
+        { "name": "Payment history", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/payments/" } },
+        { "name": "Complete payment", "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"status\": \"completed\"\n}" }, "url": "{{base_url}}/payments/{{payment_id}}/" } }
+      ]
+    },
+    {
+      "name": "Notifications and activity",
+      "item": [
+        { "name": "Notifications", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/notifications/" } },
+        { "name": "Mark notification read", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/notifications/{{notification_id}}/mark_read/" } },
+        { "name": "Activity history", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/activity/" } }
+      ]
+    },
+    {
+      "name": "Search and invites",
+      "item": [
+        { "name": "Search users", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/users/search/?q=ali" } },
+        { "name": "Send group invite", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"group\": {{group_id}},\n  \"invitee\": {{member_user_id}}\n}" }, "url": "{{base_url}}/invites/" } },
+        { "name": "Invite history/status", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/invites/" } },
+        { "name": "Accept invite", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/invites/{{invite_id}}/accept/" } },
+        { "name": "Decline invite", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }], "url": "{{base_url}}/invites/{{invite_id}}/decline/" } }
       ]
     }
   ]
