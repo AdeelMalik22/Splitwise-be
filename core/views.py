@@ -5,8 +5,9 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from core.models import Group, UserGroup, Expense, ExpenseParticipant, Payment
+from core.models import Group, UserGroup, Expense, ExpenseParticipant, Payment, Notification
 from core.payment_serializers import PaymentSerializer
+from core.notification_serializers import NotificationSerializer
 from django.utils import timezone
 from core.serializers import GroupSerializer, UserGroupSerializer, ExpenseSerializer
 from core.settlements import get_settlements_for_group
@@ -136,3 +137,19 @@ class PaymentViewSet(viewsets.ModelViewSet):
         if payment.status == Payment.COMPLETED and payment.completed_at is None:
             payment.completed_at = timezone.now()
             payment.save(update_fields=('completed_at',))
+
+
+class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(recipient=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def mark_read(self, request, pk=None):
+        notification = self.get_object()
+        if notification.read_at is None:
+            notification.read_at = timezone.now()
+            notification.save(update_fields=('read_at',))
+        return Response(self.get_serializer(notification).data)
