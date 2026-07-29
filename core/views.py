@@ -1,5 +1,4 @@
 from django.core.cache import cache
-from django_redis import get_redis_connection
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -81,20 +80,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         # Never share cached expense data between authenticated users.
         cache_key = f"expense-data-user-{request.user.pk}"
 
-        # Test Redis directly
-        redis_conn = get_redis_connection("default")
-        try:
-            pong = redis_conn.ping()
-            print("✅ Redis is connected:", pong)
-        except Exception as e:
-            print("❌ Redis connection failed:", e)
-
-        # Measure cache access time
-        import time
-        start = time.perf_counter()
         cached_data = cache.get(cache_key)
-        end = time.perf_counter()
-        print(f"Cache get time: {(end - start) * 1000:.4f} ms")
 
         if cached_data:
             return Response(cached_data, status=status.HTTP_200_OK)
