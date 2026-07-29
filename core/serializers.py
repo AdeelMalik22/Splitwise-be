@@ -68,7 +68,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         group = attrs.get('group_id', self.instance.group_id if self.instance else None)
         if request and group and not UserGroup.objects.filter(
-            user=request.user, group_id=group
+            user_id=request.user, group_id=group
         ).exists():
             raise serializers.ValidationError({'group_id': 'You are not a member of this group.'})
 

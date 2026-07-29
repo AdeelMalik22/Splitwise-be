@@ -36,6 +36,7 @@ jobs:
         env:
           DJANGO_DEBUG: 'True'
           DJANGO_SECRET_KEY: ci-only-secret
+          DJANGO_TEST: 'True'
           POSTGRES_DB: splitwise_drf
           POSTGRES_USER: myuser
           POSTGRES_PASSWORD: test-password

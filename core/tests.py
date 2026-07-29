@@ -1,9 +1,13 @@
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from core.settlements import get_settlements_for_group
 from core.views import GroupViewSet
+from core.models import Group, UserGroup
+from user.models import User
 
 
 class SettlementTests(SimpleTestCase):
@@ -40,3 +44,69 @@ class GroupOwnershipTests(SimpleTestCase):
         view.perform_create(serializer)
 
         get_or_create.assert_called_once_with(user_id='user', group_id='group')
+
+
+class ExpenseWorkflowIntegrationTests(APITestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username='owner', email='owner@example.com', password='password-123'
+        )
+        self.member = User.objects.create_user(
+            username='member', email='member@example.com', password='password-123'
+        )
+        self.client.force_authenticate(self.owner)
+
+    def create_group_with_member(self):
+        response = self.client.post('/groups/', {
+            'name': 'Trip', 'description': 'Shared trip',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        group_id = response.data['id']
+        response = self.client.post('/usersgroup/', {
+            'user_id': self.member.pk, 'group_id': group_id,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        return group_id
+
+    def test_group_creation_and_membership_boundaries(self):
+        response = self.client.post('/groups/', {
+            'name': 'Trip', 'description': 'Shared trip',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        group_id = response.data['id']
+
+        # Users can only create memberships for themselves.
+        response = self.client.post('/usersgroup/', {
+            'user_id': self.member.pk, 'group_id': group_id,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.assertEqual(self.client.get('/groups/').status_code, status.HTTP_200_OK)
+
+    def test_expense_and_settlement_workflow(self):
+        group = Group.objects.create(name='Trip', description='Shared trip')
+        UserGroup.objects.create(user_id=self.owner, group_id=group)
+        UserGroup.objects.create(user_id=self.member, group_id=group)
+
+        response = self.client.post('/expense/', {
+            'name': 'Dinner', 'description': 'Food', 'amount': '100.00',
+            'paid_by': [self.owner.pk], 'split_on': [self.owner.pk, self.member.pk],
+            'group_id': group.pk,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['paid_by'], [self.owner.pk])
+        self.assertEqual(response.data['split_on'], [self.owner.pk, self.member.pk])
+
+        response = self.client.get(f'/expense/{group.pk}/settlements/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['you will get'][0]['amount'], 50.0)
+
+    def test_expense_participants_must_belong_to_group(self):
+        group = Group.objects.create(name='Trip', description='Shared trip')
+        UserGroup.objects.create(user_id=self.owner, group_id=group)
+        response = self.client.post('/expense/', {
+            'name': 'Dinner', 'description': 'Food', 'amount': '100.00',
+            'paid_by': [self.member.pk], 'split_on': [self.owner.pk],
+            'group_id': group.pk,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
