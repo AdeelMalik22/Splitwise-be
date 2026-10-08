@@ -291,6 +291,11 @@ class OverviewViewModel(private val repo: Repository) : ViewModel() {
     fun updateGroup(id: Int, name: String, description: String, icon: String, onDone: () -> Unit) =
         act({ repo.updateGroup(id, name, description, icon) }, "Group updated.", onDone)
 
+    fun uploadAvatar(jpeg: ByteArray) = act({ repo.uploadAvatar(jpeg) }, "Profile picture updated.")
+    fun removeAvatar() = act({ repo.removeAvatar() }, "Profile picture removed.")
+    fun uploadGroupImage(id: Int, jpeg: ByteArray) = act({ repo.uploadGroupImage(id, jpeg) }, "Group picture updated.")
+    fun removeGroupImage(id: Int) = act({ repo.removeGroupImage(id) }, "Group picture removed.")
+
     fun deleteGroup(id: Int, onDone: () -> Unit) = act({ repo.deleteGroup(id) }, "Group deleted.", onDone)
 
     fun removeMember(groupId: Int, userId: Int) = act({ repo.removeMember(groupId, userId) }, "Member removed.")

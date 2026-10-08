@@ -39,7 +39,7 @@ import java.math.BigDecimal
 fun GroupDetailScreen(
     vm: GroupDetailViewModel, groupId: Int, title: String, userId: Int?, onBack: () -> Unit, onAddExpense: () -> Unit,
     onSettle: (SettleTarget) -> Unit, onLeave: () -> Unit, emoji: String, onSettings: () -> Unit, onEditExpense: (Expense) -> Unit,
-    isAdmin: Boolean, onDeleteGroup: () -> Unit, onOpenSettleHub: () -> Unit,
+    isAdmin: Boolean, onDeleteGroup: () -> Unit, onOpenSettleHub: () -> Unit, imageUrl: String? = null,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -90,7 +90,7 @@ fun GroupDetailScreen(
             val members = (state.members as? Load.Ready)?.data.orEmpty()
             val expenses = (state.expenses as? Load.Ready)?.data.orEmpty()
             val settlements = (state.settlements as? Load.Ready)?.data
-            GroupHeader(emoji, title, members, expenses, settlements, onOpenSettleHub, userId)
+            GroupHeader(emoji, imageUrl, title, members, expenses, settlements, onOpenSettleHub, userId)
             TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.primary) {
                 listOf("Expenses", "Balances", "Members").forEachIndexed { i, label ->
                     Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label, style = MaterialTheme.typography.titleSmall) },
@@ -164,7 +164,7 @@ private fun ExpenseSheet(e: Expense, members: List<Member>, userId: Int?, onDism
             e.splitOn.forEach { id ->
                 val m = byId[id]
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Avatar(initials(m?.name.orEmpty(), m?.username ?: "?"), id, 32.dp)
+                    Avatar(initials(m?.name.orEmpty(), m?.username ?: "?"), id, 32.dp, imageUrl = m?.avatar)
                     Text((m?.username ?: "User $id") + if (id == userId) " (you)" else "", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     Text(formatRs(shareOf(e, id), forceDecimals = true), style = MaterialTheme.typography.titleSmall)
                 }
@@ -181,14 +181,14 @@ private fun ExpenseSheet(e: Expense, members: List<Member>, userId: Int?, onDism
 }
 
 @Composable
-private fun GroupHeader(emoji: String, title: String, members: List<Member>, expenses: List<Expense>, s: Settlements?, onSettleHub: () -> Unit, userId: Int?) {
+private fun GroupHeader(emoji: String, imageUrl: String?, title: String, members: List<Member>, expenses: List<Expense>, s: Settlements?, onSettleHub: () -> Unit, userId: Int?) {
     val c = MaterialTheme.split
     val total = expenses.fold(BigDecimal.ZERO) { a, e -> a + e.amount.toMoney() }
     val owe = s?.youOwe.orEmpty().fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
     val owed = s?.owedToYou.orEmpty().fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
     SplitCard(Modifier.padding(16.dp, 4.dp, 16.dp, 12.dp).fillMaxWidth()) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(c.primaryBg), contentAlignment = Alignment.Center) { Text(emoji, fontSize = 24.sp) }
+            GroupBadge(emoji, imageUrl, 48.dp)
             Column {
                 Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -304,10 +304,10 @@ private fun MembersTab(
             )
         }
         items(results.filter { it.id !in memberIds }, key = { "r${it.id}" }) { u ->
-            PersonRow(u.id, u.username, u.name) { SmallButton("Invite", { onInvite(u); query = "" }) }
+            PersonRow(u.id, u.username, u.name, u.avatar) { SmallButton("Invite", { onInvite(u); query = "" }) }
         }
         item { SectionHeader("Members") }
-        items(members, key = { "m${it.id}" }) { m -> PersonRow(m.id, m.username, m.name) {} }
+        items(members, key = { "m${it.id}" }) { m -> PersonRow(m.id, m.username, m.name, m.avatar) {} }
         item {
             Box(
                 Modifier.padding(16.dp, 24.dp, 16.dp, 8.dp).fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp))
@@ -323,9 +323,9 @@ private fun MembersTab(
 }
 
 @Composable
-fun PersonRow(id: Int, username: String, name: String, trailing: @Composable () -> Unit) {
+fun PersonRow(id: Int, username: String, name: String, avatar: String? = null, trailing: @Composable () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Avatar(initials(name, username), id, 40.dp)
+        Avatar(initials(name, username), id, 40.dp, imageUrl = avatar)
         Column(Modifier.weight(1f)) {
             Text(name.ifBlank { username }, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
             Text("@$username", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall)

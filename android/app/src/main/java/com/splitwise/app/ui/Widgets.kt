@@ -34,13 +34,17 @@ private val avatarColors = listOf(
     Color(0xFF0F766E), Color(0xFF2563EB), Color(0xFF7C3AED), Color(0xFFBE123C), Color(0xFFB45309), Color(0xFF475569),
 )
 
+/** Initials on a colour; the profile picture, when there is one, is drawn over them once it loads. */
 @Composable
-fun Avatar(label: String, colorKey: Int, size: Dp = 40.dp, modifier: Modifier = Modifier) {
+fun Avatar(label: String, colorKey: Int, size: Dp = 40.dp, modifier: Modifier = Modifier, imageUrl: String? = null) {
     Box(
         modifier.size(size).clip(CircleShape).background(avatarColors[colorKey.mod(avatarColors.size)]),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, color = Color.White, fontSize = (size.value * 0.34f).sp, fontWeight = FontWeight.SemiBold)
+        if (!imageUrl.isNullOrBlank()) {
+            coil3.compose.AsyncImage(model = imageUrl, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        }
     }
 }
 
@@ -51,6 +55,7 @@ fun AvatarStack(members: List<Member>, modifier: Modifier = Modifier, max: Int =
             Avatar(
                 initials(m.name, m.username).take(1), m.id, 24.dp,
                 Modifier.offset(x = (-8 * i).dp).border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                imageUrl = m.avatar,
             )
         }
     }

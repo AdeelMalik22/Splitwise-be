@@ -23,6 +23,7 @@ import com.splitwise.app.data.Member
 fun GroupSettingsScreen(
     group: Group, members: List<Member>, userId: Int?,
     onSave: (String, String, String) -> Unit, onRemove: (Int) -> Unit, onDelete: () -> Unit, onBack: () -> Unit,
+    onPickPhoto: () -> Unit = {}, onRemovePhoto: () -> Unit = {},
 ) {
     val isOwner = group.createdBy == userId
     var name by rememberSaveable { mutableStateOf(group.name) }
@@ -37,7 +38,15 @@ fun GroupSettingsScreen(
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             IconField(name, { name = it }, "Group name", Icons.Default.Edit)
             IconField(description, { description = it }, "Description", Icons.Default.Edit)
-            Text("Icon", style = MaterialTheme.typography.titleSmall)
+            Text("Group picture", style = MaterialTheme.typography.titleSmall)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                GroupBadge(group.emoji(), group.image, 72.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallButton(if (group.image == null) "Add photo" else "Change photo", onPickPhoto)
+                    if (group.image != null) SmallButton("Remove photo", onRemovePhoto, primary = false)
+                }
+            }
+            Text("Icon (shown when there is no picture)", style = MaterialTheme.typography.titleSmall)
             IconPicker(icon) { icon = it }
             PrimaryButton("Save changes", { onSave(name, description, icon) }, enabled = changed && name.isNotBlank())
 
@@ -45,7 +54,7 @@ fun GroupSettingsScreen(
             SplitCard(Modifier.fillMaxWidth()) {
                 members.forEachIndexed { i, m ->
                     if (i > 0) Divider16()
-                    PersonRow(m.id, m.username, m.name) {
+                    PersonRow(m.id, m.username, m.name, m.avatar) {
                         when {
                             m.id == group.createdBy -> Text("Creator", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                             isOwner -> SmallButton("Remove", { removing = m }, primary = false)

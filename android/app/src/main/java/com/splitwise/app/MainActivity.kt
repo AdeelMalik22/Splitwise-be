@@ -130,6 +130,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pend
             dismissButton = { TextButton(onClick = { session.markBiometricOffered() }) { Text("Not now") } },
         )
     }
+    val pickAvatar = rememberPhotoPicker(context, onPicked = overviewVm::uploadAvatar, onFailed = { overviewVm.showMessage("Couldn't read that picture.") })
     LaunchedEffect(pendingInvite) { if (pendingInvite != null) nav.navigate("join") { launchSingleTop = true } }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); overviewVm.messageShown() } }
@@ -191,6 +192,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pend
                     AccountScreen(
                         it, isDark, session::setDarkMode, alertsOn, session::setAlertsOn, session::logout,
                         currency = activeCurrency, onCurrencyChange = { c -> session.setCurrency(c.code) },
+                        onPickPhoto = pickAvatar, onRemovePhoto = overviewVm::removeAvatar,
                         fingerprint = Biometric.state(androidx.compose.ui.platform.LocalContext.current),
                         fingerprintOn = enrolled != null,
                         onFingerprintChange = { on -> if (on) enrollFingerprint() else session.disableBiometric() },
@@ -221,6 +223,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pend
                     },
                     onLeave = { overviewVm.leaveGroup(id) { nav.popBackStack("home", false) } },
                     emoji = ready?.groups?.firstOrNull { it.id == id }?.emoji() ?: emojiFor(id),
+                    imageUrl = ready?.groups?.firstOrNull { it.id == id }?.image,
                     onSettings = { nav.navigate("group/$id/settings") },
                     onEditExpense = { e -> nav.navigate("add?group=$id&edit=${e.id}") },
                     isAdmin = ready?.groups?.firstOrNull { it.id == id }?.createdBy == userId,
@@ -246,6 +249,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pend
             }
             composable("group/{id}/settings", arguments = listOf(navArgument("id") { type = NavType.IntType })) { entry ->
                 val id = entry.arguments!!.getInt("id")
+                val pickGroupPhoto = rememberPhotoPicker(context, onPicked = { overviewVm.uploadGroupImage(id, it) }, onFailed = { overviewVm.showMessage("Couldn't read that picture.") })
                 TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { o ->
                     val group = o.groups.firstOrNull { it.id == id }
                     if (group == null) EmptyState("This group is no longer available.")
@@ -255,6 +259,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pend
                         onRemove = { uid -> overviewVm.removeMember(id, uid) },
                         onDelete = { overviewVm.deleteGroup(id) { nav.popBackStack("home", false) } },
                         onBack = { nav.popBackStack() },
+                        onPickPhoto = pickGroupPhoto, onRemovePhoto = { overviewVm.removeGroupImage(id) },
                     )
                 }
             }

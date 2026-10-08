@@ -41,12 +41,13 @@ data class Group(
     val name: String,
     val description: String = "",
     val icon: String = "",
+    val image: String? = null,
     @SerialName("created_by") val createdBy: Int? = null,
 )
 @Serializable data class GroupRequest(val name: String, val description: String, val icon: String = "")
 
-@Serializable data class Member(val id: Int, val username: String, val name: String = "")
-@Serializable data class UserSummary(val id: Int, val username: String, val name: String = "")
+@Serializable data class Member(val id: Int, val username: String, val name: String = "", val avatar: String? = null)
+@Serializable data class UserSummary(val id: Int, val username: String, val name: String = "", val avatar: String? = null)
 
 @Serializable
 data class SplitDetail(
@@ -129,7 +130,7 @@ data class AppNotification(
     @SerialName("read_at") val readAt: String? = null,
 )
 
-@Serializable data class Profile(val id: Int, val username: String, val name: String = "", val email: String = "")
+@Serializable data class Profile(val id: Int, val username: String, val name: String = "", val email: String = "", val avatar: String? = null)
 
 @Serializable
 data class ActivityItem(

@@ -1,6 +1,9 @@
 package com.splitwise.app.data
 
+import okhttp3.MultipartBody
 import retrofit2.http.Body
+import retrofit2.http.Multipart
+import retrofit2.http.Part
 import retrofit2.http.DELETE
 import retrofit2.http.PATCH
 import retrofit2.http.GET
@@ -22,6 +25,8 @@ interface SplitwiseApi {
     @GET("groups/") suspend fun groups(): Page<Group>
     @POST("groups/") suspend fun createGroup(@Body body: GroupRequest): Group
     @PATCH("groups/{id}/") suspend fun updateGroup(@Path("id") id: Int, @Body body: GroupRequest): Group
+    @Multipart @POST("groups/{id}/image/") suspend fun uploadGroupImage(@Path("id") id: Int, @Part image: MultipartBody.Part): Group
+    @DELETE("groups/{id}/image/") suspend fun removeGroupImage(@Path("id") id: Int): Group
     @DELETE("groups/{id}/") suspend fun deleteGroup(@Path("id") id: Int)
     @DELETE("groups/{id}/members/{userId}/") suspend fun removeMember(@Path("id") id: Int, @Path("userId") userId: Int)
 
@@ -44,6 +49,8 @@ interface SplitwiseApi {
     @POST("payments/{id}/confirm/") suspend fun confirmPayment(@Path("id") id: Int): Payment
     @DELETE("payments/{id}/") suspend fun cancelPayment(@Path("id") id: Int)
 
+    @Multipart @POST("users/avatar/") suspend fun uploadAvatar(@Part image: MultipartBody.Part): Profile
+    @DELETE("users/avatar/") suspend fun removeAvatar(): Profile
     @PATCH("users/{id}/") suspend fun updateProfile(@Path("id") id: Int, @Body body: ProfileUpdate): Profile
     @POST("users/change_password/") suspend fun changePassword(@Body body: ChangePasswordRequest)
     @POST("users/delete_account/") suspend fun deleteAccount(@Body body: DeleteAccountRequest)

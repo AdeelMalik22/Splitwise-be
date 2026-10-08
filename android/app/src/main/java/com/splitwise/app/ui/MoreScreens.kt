@@ -118,13 +118,13 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Paid by", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    members.forEach { m -> PersonPick(m.id, initials(m.name, m.username), if (m.id == userId) "You" else m.username, paidBy == m.id) { paidBy = m.id } }
+                    members.forEach { m -> PersonPick(m.id, initials(m.name, m.username), if (m.id == userId) "You" else m.username, paidBy == m.id, m.avatar) { paidBy = m.id } }
                 }
                 Text("Split between", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     members.forEach { m ->
                         val on = m.id in selected
-                        PersonPick(m.id, initials(m.name, m.username), if (m.id == userId) "You" else m.username, on) {
+                        PersonPick(m.id, initials(m.name, m.username), if (m.id == userId) "You" else m.username, on, m.avatar) {
                             splitOn = if (on) selected - m.id else selected + m.id
                         }
                     }
@@ -204,10 +204,10 @@ private fun SelectChip(text: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PersonPick(id: Int, initials: String, label: String, selected: Boolean, onClick: () -> Unit) {
+private fun PersonPick(id: Int, initials: String, label: String, selected: Boolean, avatar: String? = null, onClick: () -> Unit) {
     Column(Modifier.clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box {
-            Avatar(initials, id, 48.dp, Modifier.then(if (selected) Modifier.border(2.5.dp, MaterialTheme.colorScheme.primary, CircleShape) else Modifier.background(Color.Transparent)))
+            Avatar(initials, id, 48.dp, Modifier.then(if (selected) Modifier.border(2.5.dp, MaterialTheme.colorScheme.primary, CircleShape) else Modifier.background(Color.Transparent)), imageUrl = avatar)
             if (selected) Box(Modifier.align(Alignment.BottomEnd).size(18.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
                 Icon(Icons.Default.Check, null, Modifier.size(12.dp), tint = Color.White)
             }
@@ -254,7 +254,7 @@ fun InvitesScreen(overview: Overview, userId: Int?, search: InviteSearchViewMode
                 }
                 if (state.searched && state.results.isEmpty()) item { EmptyState("No users match \"$query\".") }
                 items(state.results, key = { "s${it.id}" }) { u ->
-                    PersonRow(u.id, u.username, u.name) {
+                    PersonRow(u.id, u.username, u.name, u.avatar) {
                         SmallButton("Invite", { groupId?.let { gid -> search.invite(gid, u) { query = ""; onSent() } } })
                     }
                 }
@@ -377,17 +377,26 @@ fun AccountScreen(
     onEditProfile: () -> Unit, onChangePassword: () -> Unit, onPayments: () -> Unit, onDeleteAccount: (String) -> Unit,
     fingerprint: BiometricState = BiometricState.Unavailable, fingerprintOn: Boolean = false, onFingerprintChange: (Boolean) -> Unit = {},
     currency: Currency = activeCurrency, onCurrencyChange: (Currency) -> Unit = {},
+    onPickPhoto: () -> Unit = {}, onRemovePhoto: () -> Unit = {},
 ) {
     val me = overview.me
     val c = MaterialTheme.split
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var pickCurrency by rememberSaveable { mutableStateOf(false) }
+    var photoMenu by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         NavBar("Account", onBack = null)
         if (me != null) SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Avatar(initials(me.name, me.username), me.id, 56.dp)
+                Box(Modifier.clickable { photoMenu = true }) {
+                    Avatar(initials(me.name, me.username), me.id, 64.dp, imageUrl = me.avatar)
+                    Box(
+                        Modifier.align(Alignment.BottomEnd).size(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)
+                            .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.Default.CameraAlt, "Change photo", Modifier.size(12.dp), tint = Color.White) }
+                }
                 Column {
                     Text(me.name.ifBlank { me.username }, style = MaterialTheme.typography.titleLarge)
                     Text("@${me.username}", color = c.fg2, style = MaterialTheme.typography.bodySmall)
@@ -451,6 +460,19 @@ fun AccountScreen(
         }
         Spacer(Modifier.height(24.dp))
     }
+    if (photoMenu) AlertDialog(
+        onDismissRequest = { photoMenu = false },
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Profile picture") },
+        text = { Text("Pick a photo from your gallery. It is shown to the people in your groups.") },
+        confirmButton = { TextButton(onClick = { photoMenu = false; onPickPhoto() }) { Text("Choose photo") } },
+        dismissButton = {
+            Row {
+                if (me?.avatar != null) TextButton(onClick = { photoMenu = false; onRemovePhoto() }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { photoMenu = false }) { Text("Cancel") }
+            }
+        },
+    )
     if (pickCurrency) AlertDialog(
         onDismissRequest = { pickCurrency = false },
         containerColor = MaterialTheme.colorScheme.surface,

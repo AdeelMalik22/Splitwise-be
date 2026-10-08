@@ -57,6 +57,9 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.4")
     implementation("androidx.datastore:datastore-preferences:1.1.7")
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    implementation("io.coil-kt.coil3:coil-compose:3.0.4")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
 
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:3.0.0")

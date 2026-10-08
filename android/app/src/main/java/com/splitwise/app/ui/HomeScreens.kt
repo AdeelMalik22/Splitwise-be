@@ -36,7 +36,7 @@ fun HomeScreen(overview: Overview, userId: Int?, onOpenGroup: (Group) -> Unit, o
                     Text(if (overview.groups.isEmpty()) "Welcome," else "Hello,", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall)
                     Text(me?.name?.ifBlank { null }?.substringBefore(' ') ?: me?.username ?: "there", style = MaterialTheme.typography.headlineSmall)
                 }
-                if (me != null) Avatar(initials(me.name, me.username), me.id, 40.dp)
+                if (me != null) Avatar(initials(me.name, me.username), me.id, 40.dp, imageUrl = me.avatar)
             }
         }
         if (overview.groups.isEmpty()) {
@@ -188,9 +188,7 @@ fun GroupRow(group: Group, overview: Overview, onClick: () -> Unit) {
     val members = overview.members[group.id].orEmpty()
     val c = MaterialTheme.split
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp, 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(c.primaryBg), contentAlignment = Alignment.Center) {
-            Text(group.emoji(), fontSize = 22.sp)
-        }
+        GroupBadge(group.emoji(), group.image, 44.dp)
         Column(Modifier.weight(1f)) {
             Text(group.name, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             Text("${members.size} member${if (members.size == 1) "" else "s"}", color = c.fg2, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 3.dp))
@@ -313,4 +311,16 @@ fun CreateGroupDialog(onDismiss: () -> Unit, onCreate: (String, String, String) 
         confirmButton = { TextButton(onClick = { onCreate(name, description, icon) }, enabled = name.isNotBlank()) { Text("Create") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+
+/** The group's picture if it has one, otherwise its emoji on a tinted tile. */
+@Composable
+fun GroupBadge(emoji: String, imageUrl: String?, size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+    Box(modifier.size(size).clip(RoundedCornerShape(size / 4)).background(MaterialTheme.split.primaryBg), contentAlignment = Alignment.Center) {
+        Text(emoji, fontSize = (size.value / 2).sp)
+        if (!imageUrl.isNullOrBlank()) {
+            coil3.compose.AsyncImage(model = imageUrl, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        }
+    }
 }

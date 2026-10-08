@@ -1,6 +1,7 @@
 package com.splitwise.app.data
 
 import kotlinx.coroutines.CancellationException
+import okhttp3.MediaType.Companion.toMediaType
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -107,6 +108,14 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
         call { api.createGroup(GroupRequest(name.trim(), description.trim(), icon)) }
     suspend fun updateGroup(id: Int, name: String, description: String, icon: String) =
         call { api.updateGroup(id, GroupRequest(name.trim(), description.trim(), icon)) }
+    private fun jpegPart(bytes: ByteArray) = okhttp3.MultipartBody.Part.createFormData(
+        "image", "photo.jpg", okhttp3.RequestBody.create("image/jpeg".toMediaType(), bytes),
+    )
+    suspend fun uploadGroupImage(id: Int, jpeg: ByteArray) = call { api.uploadGroupImage(id, jpegPart(jpeg)) }
+    suspend fun removeGroupImage(id: Int) = call { api.removeGroupImage(id) }
+    suspend fun uploadAvatar(jpeg: ByteArray) = call { api.uploadAvatar(jpegPart(jpeg)) }
+    suspend fun removeAvatar() = call { api.removeAvatar() }
+
     suspend fun deleteGroup(id: Int) = call { api.deleteGroup(id) }
     suspend fun removeMember(groupId: Int, userId: Int) = call { api.removeMember(groupId, userId) }
 
