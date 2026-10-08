@@ -11,6 +11,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 
+/** Honest feedback: the invite exists either way, but the email may not have gone out. */
+fun emailInviteMessage(invite: Invite, email: String) =
+    if (invite.emailSent == false) "Invite saved, but the email to ${email.trim()} could NOT be sent. The server's email settings need fixing."
+    else "Invitation emailed to ${email.trim()}."
+
 sealed interface Load<out T> {
     data object Loading : Load<Nothing>
     data class Error(val message: String) : Load<Nothing>
@@ -370,7 +375,7 @@ class GroupDetailViewModel(private val repo: Repository, private val groupId: In
         }
         viewModelScope.launch {
             repo.inviteByEmail(groupId, email).fold(
-                { _state.update { it.copy(message = "Invitation emailed to ${email.trim()}.") }; onSent() },
+                { invite -> _state.update { it.copy(message = emailInviteMessage(invite, email)) }; onSent() },
                 { err -> _state.update { it.copy(message = err.userMessage()) } },
             )
         }
@@ -500,7 +505,7 @@ class InviteSearchViewModel(private val repo: Repository) : ViewModel() {
         }
         viewModelScope.launch {
             repo.inviteByEmail(groupId, email).fold(
-                { _state.update { it.copy(message = "Invitation emailed to ${email.trim()}.") }; onSent() },
+                { invite -> _state.update { it.copy(message = emailInviteMessage(invite, email)) }; onSent() },
                 { err -> _state.update { it.copy(message = err.userMessage()) } },
             )
         }

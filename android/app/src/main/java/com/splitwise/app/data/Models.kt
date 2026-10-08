@@ -108,6 +108,8 @@ data class Invite(
     @SerialName("invitee_username") val inviteeUsername: String = "",
     val email: String = "",
     val status: String,
+    /** Only present right after creating an email invite: whether the server managed to send the message. */
+    @SerialName("email_sent") val emailSent: Boolean? = null,
 )
 
 /** Invite a member by id, or an outsider by [email] (exactly one of the two). */
