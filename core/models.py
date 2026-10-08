@@ -9,7 +9,7 @@ from user.models import User
 class Group(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255)
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=255, blank=True, default='')
     icon = models.CharField(max_length=16, blank=True, default='')
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_groups')
     created = models.DateTimeField(auto_now_add=True)
@@ -36,7 +36,7 @@ class UserGroup(models.Model):
 class Expense(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255)
-    description = models.CharField(max_length=255)
+    description = models.CharField(max_length=255, blank=True, default='')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     group_id = models.ForeignKey(Group, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
