@@ -2,6 +2,7 @@ from decimal import Decimal, InvalidOperation
 
 from rest_framework import serializers
 
+from user.models import GroupInvite
 from core.models import Group, UserGroup, Expense, ExpenseParticipant
 
 
@@ -18,6 +19,13 @@ class UserGroupSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and attrs.get('user_id') and attrs['user_id'] != request.user:
             raise serializers.ValidationError({'user_id': 'You can only manage your own memberships.'})
+        if self.instance is not None:
+            if attrs.get('group_id', self.instance.group_id) != self.instance.group_id:
+                raise serializers.ValidationError({'group_id': 'Membership group cannot be changed.'})
+        elif request and not GroupInvite.objects.filter(
+            invitee=request.user, group=attrs['group_id'], status=GroupInvite.ACCEPTED
+        ).exists():
+            raise serializers.ValidationError({'group_id': 'Joining a group requires an accepted invite.'})
         return attrs
 
 
