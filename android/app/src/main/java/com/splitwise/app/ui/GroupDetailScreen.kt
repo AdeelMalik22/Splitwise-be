@@ -39,11 +39,13 @@ import java.math.BigDecimal
 fun GroupDetailScreen(
     vm: GroupDetailViewModel, groupId: Int, title: String, userId: Int?, onBack: () -> Unit, onAddExpense: () -> Unit,
     onSettle: (SettleTarget) -> Unit, onLeave: () -> Unit, emoji: String, onSettings: () -> Unit, onEditExpense: (Expense) -> Unit,
+    isAdmin: Boolean, onDeleteGroup: () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var menuOpen by remember { mutableStateOf(false) }
     var confirmLeave by rememberSaveable { mutableStateOf(false) }
+    var confirmDeleteGroup by rememberSaveable { mutableStateOf(false) }
     var openExpenseId by rememberSaveable { mutableStateOf<Int?>(null) }
     var confirmDelete by remember { mutableStateOf<Expense?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -79,8 +81,8 @@ fun GroupDetailScreen(
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(text = { Text("Group settings") }, onClick = { menuOpen = false; onSettings() })
                         DropdownMenuItem(
-                            text = { Text("Leave group", color = MaterialTheme.colorScheme.error) },
-                            onClick = { menuOpen = false; confirmLeave = true },
+                            text = { Text(if (isAdmin) "Delete group" else "Leave group", color = MaterialTheme.colorScheme.error) },
+                            onClick = { menuOpen = false; if (isAdmin) confirmDeleteGroup = true else confirmLeave = true },
                         )
                     }
                 }
@@ -100,7 +102,9 @@ fun GroupDetailScreen(
                 when (tab) {
                     0 -> LoadView(state.expenses, { vm.refresh() }) { ExpensesTab(it, names, userId) { e -> openExpenseId = e.id } }
                     1 -> LoadView(state.settlements, { vm.refresh() }) { BalancesTab(it, members, groupId, title, onSettle) }
-                    else -> LoadView(state.members, { vm.refresh() }) { MembersTab(it, state.searchResults, vm::search, vm::invite) }
+                    else -> LoadView(state.members, { vm.refresh() }) {
+                        MembersTab(it, state.searchResults, vm::search, vm::invite, isAdmin) { if (isAdmin) confirmDeleteGroup = true else confirmLeave = true }
+                    }
                 }
             }
         }
@@ -117,6 +121,14 @@ fun GroupDetailScreen(
         },
         confirmButton = { TextButton(onClick = { confirmLeave = false; onLeave() }) { Text("Leave Group", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Cancel") } },
+    )
+    if (confirmDeleteGroup) AlertDialog(
+        onDismissRequest = { confirmDeleteGroup = false },
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Delete \"$title\"?") },
+        text = { Text("This permanently deletes the group, all its expenses and payments for every member. This cannot be undone.") },
+        confirmButton = { TextButton(onClick = { confirmDeleteGroup = false; onDeleteGroup() }) { Text("Delete group", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = { confirmDeleteGroup = false }) { Text("Cancel") } },
     )
     confirmDelete?.let { e ->
         AlertDialog(
@@ -267,7 +279,10 @@ private fun BalanceCard2(text: String, amount: BigDecimal, bg: Color, ring: Colo
 }
 
 @Composable
-private fun MembersTab(members: List<Member>, results: List<UserSummary>, onSearch: (String) -> Unit, onInvite: (UserSummary) -> Unit) {
+private fun MembersTab(
+    members: List<Member>, results: List<UserSummary>, onSearch: (String) -> Unit, onInvite: (UserSummary) -> Unit,
+    isAdmin: Boolean, onDangerAction: () -> Unit,
+) {
     var query by rememberSaveable { mutableStateOf("") }
     val memberIds = members.map { it.id }.toSet()
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -285,6 +300,17 @@ private fun MembersTab(members: List<Member>, results: List<UserSummary>, onSear
         }
         item { SectionHeader("Members") }
         items(members, key = { "m${it.id}" }) { m -> PersonRow(m.id, m.username, m.name) {} }
+        item {
+            Box(
+                Modifier.padding(16.dp, 24.dp, 16.dp, 8.dp).fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp))
+                    .border(1.5.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f), RoundedCornerShape(16.dp)).clickable(onClick = onDangerAction),
+                contentAlignment = Alignment.Center,
+            ) { Text(if (isAdmin) "Delete group" else "Leave group", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge) }
+            Text(
+                if (isAdmin) "You created this group, so you can delete it for everyone." else "You can leave at any time. Your past expenses stay in the group.",
+                Modifier.padding(horizontal = 16.dp), color = MaterialTheme.split.fg3, style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
 }
 

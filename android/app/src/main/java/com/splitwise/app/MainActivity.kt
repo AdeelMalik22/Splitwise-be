@@ -162,6 +162,8 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int) {
                     emoji = ready?.groups?.firstOrNull { it.id == id }?.emoji() ?: emojiFor(id),
                     onSettings = { nav.navigate("group/$id/settings") },
                     onEditExpense = { e -> nav.navigate("add?group=$id&edit=${e.id}") },
+                    isAdmin = ready?.groups?.firstOrNull { it.id == id }?.createdBy == userId,
+                    onDeleteGroup = { overviewVm.deleteGroup(id) { nav.popBackStack("home", false) } },
                 )
             }
             composable(
