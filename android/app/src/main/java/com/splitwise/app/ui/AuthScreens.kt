@@ -102,7 +102,7 @@ private fun LogoMark() {
         Modifier.size(56.dp).shadow(12.dp, RoundedCornerShape(16.dp), spotColor = MaterialTheme.colorScheme.primary)
             .clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primary),
         contentAlignment = Alignment.Center,
-    ) { Icon(Icons.Default.Layers, null, Modifier.size(30.dp), tint = Color.White) }
+    ) { androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.splitwise.app.R.drawable.ic_coin), null, Modifier.size(34.dp)) }
 }
 
 /** 0–3 strength from length and character variety; mirrors the design's 4-segment bar. */

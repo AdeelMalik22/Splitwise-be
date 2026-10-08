@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Split coin mark: a disc cut on the diagonal, halves pulled slightly apart. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+    <group android:translateX="0.9" android:translateY="-0.9">
+        <path android:fillColor="#F59E0B"
+            android:pathData="M9.858,9.858 A20,20 0 0 1 38.142,38.142 Z" />
+    </group>
+    <group android:translateX="-0.9" android:translateY="0.9">
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M38.142,38.142 A20,20 0 0 1 9.858,9.858 Z" />
+    </group>
+</vector>
