@@ -85,3 +85,23 @@ def send_reset_email(user, request=None):
             'Choose a new password</a></p><p>The link works for 1 hour and only once. If this was not you, ignore this email: '
             'your password stays the same.</p>')
     return send_email(user.email, 'Reset your SplitEase password', text, html)
+
+
+def send_invite_email(invite, request=None):
+    link = f'{public_base_url(request)}/invite/{invite.token}/'
+    who = invite.inviter.name or invite.inviter.username
+    text = (f'{who} invited you to join "{invite.group.name}" on SplitEase, the app for sharing expenses with friends.\n\n'
+            f'Open this link on your phone to join:\n{link}\n\n'
+            f'If you are new, you will be asked to create an account with this email address ({invite.email}). '
+            f'The invitation works for {settings.INVITE_MAX_DAYS} days.')
+    html = (f'<p><b>{escape(who)}</b> invited you to join <b>{escape(invite.group.name)}</b> on SplitEase.</p>'
+            f'<p><a href="{escape(link)}" style="background:#0F766E;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none">'
+            'Open invitation</a></p>'
+            f'<p>If you are new, create your account with this email address ({escape(invite.email)}). '
+            f'The invitation works for {settings.INVITE_MAX_DAYS} days.</p><p>Or open: {escape(link)}</p>')
+    return send_email(invite.email, f'{who} invited you to {invite.group.name} on SplitEase', text, html)
+
+
+def mask_email(email):
+    name, _, domain = email.partition('@')
+    return (name[:2] + '***' if len(name) > 2 else name[:1] + '***') + '@' + domain

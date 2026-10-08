@@ -19,10 +19,12 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from splitwise.health import HealthCheckView
+from user.views import invite_page
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('health/', HealthCheckView.as_view(), name='health'),
+    path('invite/<str:token>/', invite_page, name='invite-page'),
     path("",include("user.urls")),
     path("",include("core.urls")),
 ]

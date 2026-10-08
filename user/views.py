@@ -1,6 +1,7 @@
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.conf import settings
 from django.db.models import Q
 from django.utils.html import escape
 from rest_framework import viewsets, status
@@ -11,9 +12,9 @@ from core.activity import log_activity
 from core.models import UserGroup, Group
 from user.models import User, GroupInvite
 from user.invite_serializers import UserSearchSerializer, GroupInviteSerializer
-from user.emails import read_reset_token, read_verify_token, send_reset_email, send_verification_email
+from user.emails import mask_email, read_reset_token, read_verify_token, send_invite_email, send_reset_email, send_verification_email
 from user.pages import app_link, page
-from user.throttles import EmailRateThrottle
+from user.throttles import EmailRateThrottle, InviteRateThrottle
 from user.serializers import ChangePasswordSerializer, DeleteAccountSerializer, UserSerializer
 
 from .serializers import MyTokenObtainPairSerializer
@@ -165,8 +166,68 @@ class GroupInviteViewSet(viewsets.ModelViewSet):
             Q(inviter=self.request.user) | Q(invitee=self.request.user)
         ).select_related('group', 'inviter', 'invitee')
 
+    def get_throttles(self):
+        # Creating an invite may send email, so it gets its own per-user cap on top of the global limits.
+        if self.action == 'create':
+            return [*super().get_throttles(), InviteRateThrottle()]
+        return super().get_throttles()
+
     def perform_create(self, serializer):
-        serializer.save(inviter=self.request.user)
+        invite = serializer.save(inviter=self.request.user)
+        log_activity(self.request.user, 'invited', 'member', invite.pk, group=invite.group,
+                     member=invite.invitee.username if invite.invitee else invite.email)
+        if invite.email:
+            sent = send_invite_email(invite, self.request)
+            self.email_sent = sent
+
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        response.data['email_sent'] = getattr(self, 'email_sent', None)
+        return response
+
+    @staticmethod
+    def _usable_invite(token):
+        """Returns (invite, error_message); the invite is pending and not expired when there is no error."""
+        invite = GroupInvite.objects.select_related('group', 'inviter').filter(token=token).first() if token else None
+        if invite is None:
+            return None, 'This invitation link is not valid.'
+        if invite.status != GroupInvite.PENDING:
+            return invite, 'This invitation has already been used.'
+        if invite.expired:
+            return invite, 'This invitation has expired. Ask your friend to send a new one.'
+        return invite, None
+
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny], authentication_classes=[], url_path='lookup')
+    def lookup(self, request):
+        """What the app shows before login: who invited you, to which group. Reveals no more than the emailed page does."""
+        invite, error = self._usable_invite(request.query_params.get('token', ''))
+        if error:
+            return Response({'detail': error}, status=status.HTTP_404_NOT_FOUND if invite is None else status.HTTP_410_GONE)
+        return Response({
+            'group_name': invite.group.name,
+            'inviter_name': invite.inviter.name or invite.inviter.username,
+            'email_hint': mask_email(invite.email) if invite.email else '',
+        })
+
+    @action(detail=False, methods=['post'], url_path='accept_token')
+    def accept_token(self, request):
+        """Joins the group using an emailed invitation link. Only the invited person can use it."""
+        invite, error = self._usable_invite(str(request.data.get('token', '')))
+        if error:
+            return Response({'detail': error}, status=status.HTTP_404_NOT_FOUND if invite is None else status.HTTP_410_GONE)
+        user = request.user
+        if invite.email:
+            if not user.email_verified or user.email.lower() != invite.email:
+                return Response({'detail': f'This invitation was sent to {mask_email(invite.email)}. '
+                                           'Log in with an account that uses that email address.'}, status=status.HTTP_403_FORBIDDEN)
+        elif invite.invitee_id != user.pk:
+            return Response({'detail': 'This invitation is for a different account.'}, status=status.HTTP_403_FORBIDDEN)
+        UserGroup.objects.get_or_create(user_id=user, group_id=invite.group)
+        invite.status = GroupInvite.ACCEPTED
+        invite.invitee = user
+        invite.save(update_fields=('status', 'invitee'))
+        log_activity(user, 'joined', 'group', invite.group_id, group=invite.group)
+        return Response({'group_id': invite.group_id, 'group_name': invite.group.name})
 
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
@@ -187,3 +248,17 @@ class GroupInviteViewSet(viewsets.ModelViewSet):
         invite.status = GroupInvite.DECLINED
         invite.save(update_fields=('status',))
         return Response(GroupInviteSerializer(invite).data)
+
+
+def invite_page(request, token):
+    """The page opened from an invitation email; its button hands over to the app."""
+    invite, error = GroupInviteViewSet._usable_invite(token)
+    if error:
+        return page('Invitation unavailable', error, [('Open SplitEase', app_link('login'), True)], status=404 if invite is None else 410)
+    who = invite.inviter.name or invite.inviter.username
+    buttons = [('Open in SplitEase', app_link(f'invite/{invite.token}'), True)]
+    if settings.APP_DOWNLOAD_URL:
+        buttons.append(('Get the app', settings.APP_DOWNLOAD_URL, False))
+    return page(f'Join {invite.group.name}', f'{who} invited you to share expenses in "{invite.group.name}". '
+                'Open the app to join. New here? Install SplitEase first and create your account with the email this invitation was sent to.',
+                buttons)

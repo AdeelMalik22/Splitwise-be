@@ -236,6 +236,9 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL') or EMAIL_HOST_USER or 'webm
 
 # Base URL used in emailed links, e.g. http://15.134.231.253:8000 (falls back to the incoming request's origin).
 PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '')
+# Optional link to the APK/store page, shown on the invite web page for people who don't have the app yet.
+APP_DOWNLOAD_URL = os.getenv('APP_DOWNLOAD_URL', '')
+INVITE_MAX_DAYS = int(os.getenv('INVITE_MAX_DAYS', '7'))
 
 REST_FRAMEWORK.update({
     'DEFAULT_THROTTLE_CLASSES': (
@@ -246,6 +249,7 @@ REST_FRAMEWORK.update({
         'anon': os.getenv('DRF_ANON_RATE', '20/minute'),
         'user': os.getenv('DRF_USER_RATE', '120/minute'),
         'email': os.getenv('DRF_EMAIL_RATE', '10/hour'),  # endpoints that send email
+        'invite': os.getenv('DRF_INVITE_RATE', '30/hour'),  # invitation emails per signed-in user
     },
     'PAGE_SIZE': int(os.getenv('DRF_PAGE_SIZE', '50')),
 })
