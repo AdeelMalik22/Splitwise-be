@@ -31,12 +31,6 @@ class GroupViewSet(viewsets.ModelViewSet):
         UserGroup.objects.get_or_create(user_id=self.request.user, group_id=group)
         Activity.objects.create(actor=self.request.user, action='created', entity_type='group', entity_id=group.pk)
 
-    def post(self, request, *args, **kwargs):
-        serializer = GroupSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
     @action(detail=True, methods=['delete'],url_name='delete')
     def delete_group(self,request,pk=None):
         delete_group = self.get_queryset().filter(pk=pk).first()
@@ -53,12 +47,6 @@ class UserGroupViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return UserGroup.objects.filter(user_id=self.request.user.pk)
-
-    def post(self, request, *args, **kwargs):
-        serializer = UserGroupSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'], url_path="users")
     def get_group_users(self, request, pk=None):
@@ -120,12 +108,6 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         serialized_data = serializer.data
         cache.set(cache_key, serialized_data, timeout=60 * 60 * 24)
         return Response(serialized_data, status=status.HTTP_200_OK)
-
-    def post(self, request, *args, **kwargs):
-        serializer = ExpenseSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'], url_path="settlements")
     def get_settlements(self, request, pk=None):
