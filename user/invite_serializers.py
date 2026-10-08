@@ -11,9 +11,15 @@ class UserSearchSerializer(serializers.ModelSerializer):
 
 
 class GroupInviteSerializer(serializers.ModelSerializer):
+    group_name = serializers.CharField(source='group.name', read_only=True)
+    inviter_username = serializers.CharField(source='inviter.username', read_only=True)
+    inviter_name = serializers.CharField(source='inviter.name', read_only=True)
+    invitee_username = serializers.CharField(source='invitee.username', read_only=True)
+
     class Meta:
         model = GroupInvite
-        fields = ('id', 'group', 'inviter', 'invitee', 'status', 'created_at')
+        fields = ('id', 'group', 'group_name', 'inviter', 'inviter_username', 'inviter_name',
+                  'invitee', 'invitee_username', 'status', 'created_at')
         read_only_fields = ('id', 'inviter', 'status', 'created_at')
 
     def validate(self, attrs):
