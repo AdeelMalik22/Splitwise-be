@@ -54,3 +54,34 @@ def send_verification_email(user, request=None):
             'Verify email</a></p><p>Or open this link: ' + escape(link) + '</p><p>The link works for 3 days. '
             'If you did not sign up, you can ignore this email.</p>')
     return send_email(user.email, 'Verify your SplitEase email', text, html)
+
+
+RESET_SALT = 'splitease-password-reset'
+RESET_MAX_AGE = 3600
+
+
+def make_reset_token(user):
+    # The password hash is part of the payload, so the link stops working once the password changes.
+    return signing.dumps({'uid': user.pk, 'pw': user.password[-16:]}, salt=RESET_SALT)
+
+
+def read_reset_token(token):
+    from user.models import User
+    try:
+        data = signing.loads(token, salt=RESET_SALT, max_age=RESET_MAX_AGE)
+    except signing.BadSignature:
+        return None
+    user = User.objects.filter(pk=data.get('uid')).first()
+    return user if user and user.password[-16:] == data.get('pw') else None
+
+
+def send_reset_email(user, request=None):
+    link = f'{public_base_url(request)}/users/reset_password/?token={make_reset_token(user)}'
+    name = user.name or user.username
+    text = (f'Hi {name},\n\nSomeone asked to reset the password for your SplitEase account. Choose a new one here:\n\n{link}\n\n'
+            'The link works for 1 hour and only once. If this was not you, ignore this email: your password stays the same.')
+    html = (f'<p>Hi {escape(name)},</p><p>Someone asked to reset the password for your SplitEase account.</p>'
+            f'<p><a href="{escape(link)}" style="background:#0F766E;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none">'
+            'Choose a new password</a></p><p>The link works for 1 hour and only once. If this was not you, ignore this email: '
+            'your password stays the same.</p>')
+    return send_email(user.email, 'Reset your SplitEase password', text, html)

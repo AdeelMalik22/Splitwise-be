@@ -1,5 +1,8 @@
 
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
+from django.utils.html import escape
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -8,7 +11,7 @@ from core.activity import log_activity
 from core.models import UserGroup, Group
 from user.models import User, GroupInvite
 from user.invite_serializers import UserSearchSerializer, GroupInviteSerializer
-from user.emails import read_verify_token, send_verification_email
+from user.emails import read_reset_token, read_verify_token, send_reset_email, send_verification_email
 from user.pages import app_link, page
 from user.throttles import EmailRateThrottle
 from user.serializers import ChangePasswordSerializer, DeleteAccountSerializer, UserSerializer
@@ -75,6 +78,47 @@ class UserVietSet(viewsets.ModelViewSet):
         if user is not None and not user.email_verified:
             send_verification_email(user, request)
         return Response({'detail': 'If that account needs verification, a new email is on its way.'})
+
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny], authentication_classes=[],
+            throttle_classes=[EmailRateThrottle], url_path='forgot_password')
+    def forgot_password(self, request):
+        """Always answers identically, so it can't be used to find out which emails have accounts."""
+        ident = str(request.data.get('identifier', '')).strip()
+        user = User.objects.filter(Q(email__iexact=ident) | Q(username=ident)).first() if ident else None
+        if user is not None:
+            send_reset_email(user, request)
+        return Response({'detail': 'If an account matches, we have emailed a link to reset the password.'})
+
+    @action(detail=False, methods=['get', 'post'], permission_classes=[AllowAny], authentication_classes=[],
+            throttle_classes=[], url_path='reset_password')
+    def reset_password(self, request):
+        """The page opened from the reset email: GET shows the form, POST sets the new password."""
+        token = request.query_params.get('token') or request.data.get('token', '')
+        user = read_reset_token(token)
+        if user is None:
+            return page('Link expired', 'This reset link is invalid, already used, or has expired. Request a new one from the app.',
+                        [('Open SplitEase', app_link('login'), True)], status=400)
+        error = ''
+        if request.method == 'POST':
+            password, confirm = request.data.get('password', ''), request.data.get('confirm', '')
+            try:
+                if password != confirm:
+                    raise DjangoValidationError('The two passwords do not match.')
+                validate_password(password, user)
+            except DjangoValidationError as exc:
+                error = '<div class="err">' + '<br>'.join(escape(m) for m in exc.messages) + '</div>'
+            else:
+                user.set_password(password)
+                user.email_verified = True  # they just proved they control the mailbox
+                user.save(update_fields=('password', 'email_verified'))
+                return page('Password updated ✓', 'Your password has been changed. Log in with your new password.',
+                            [('Open SplitEase', app_link('login'), True)])
+        form = (f'{error}<form method="post" action="/users/reset_password/"><input type="hidden" name="token" value="{escape(token)}">'
+                '<input type="password" name="password" placeholder="New password" minlength="8" required autocomplete="new-password">'
+                '<input type="password" name="confirm" placeholder="Confirm new password" minlength="8" required autocomplete="new-password">'
+                '<button class="btn" type="submit">Set new password</button></form>')
+        return page('Choose a new password', f'For {user.username}. At least 8 characters.', body_html=form,
+                    status=400 if error else 200)
 
     @action(detail=False, methods=['post'], url_path='change_password')
     def change_password(self, request):
