@@ -29,6 +29,7 @@ data class SettleTarget(val groupId: Int, val groupName: String, val payeeId: In
 fun SettleUpScreen(
     overview: Overview, userId: Int?, target: SettleTarget?,
     onPay: (Int, Int, String) -> Unit, onConfirm: (Payment) -> Unit, onCancel: (Payment) -> Unit, onBack: () -> Unit,
+    onSettle: (SettleTarget) -> Unit = {},
 ) {
     val c = MaterialTheme.split
     val me = overview.me
@@ -47,7 +48,8 @@ fun SettleUpScreen(
     }
 
     LazyColumn(Modifier.fillMaxSize().systemBarsPadding().imePadding(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { NavBar(if (target != null) "Settle Up" else "Payments", onBack) }
+        item { NavBar("Settle Up", onBack) }
+        if (target == null) hubSections(overview, onSettle, onConfirm, onCancel)
         if (target != null) {
             item {
                 SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
@@ -91,7 +93,7 @@ fun SettleUpScreen(
                 )
             }
         }
-        item { SectionHeader("Payment History") }
+        item { SectionHeader(if (target == null) "History" else "Payment History") }
         item {
             Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("All", "Sent", "Received", "Pending").forEachIndexed { i, label -> FilterChipPill(label, filter == i) { filter = i } }
@@ -174,6 +176,92 @@ fun ChangePasswordScreen(onSave: (String, String) -> Unit, onBack: () -> Unit) {
             IconField(confirm, { confirm = it }, "Confirm new password", androidx.compose.material.icons.Icons.Default.Lock, password = true, error = mismatch)
             if (mismatch) Text("Passwords don't match.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             PrimaryButton("Update password", { onSave(old, new) }, enabled = old.isNotEmpty() && new.length >= 8 && !mismatch && confirm.isNotEmpty())
+        }
+    }
+}
+
+/** The "what do I need to do" part of Settle Up: debts to pay, payments to confirm, payments in flight. */
+private fun androidx.compose.foundation.lazy.LazyListScope.hubSections(
+    o: Overview, onSettle: (SettleTarget) -> Unit, onConfirm: (Payment) -> Unit, onCancel: (Payment) -> Unit,
+) {
+    val debts = o.debts().filter { it.remaining.signum() > 0 }
+    val toConfirm = o.awaitingMyConfirmation()
+    val sentPending = o.payments.filter { it.status == "pending" && it.payer == o.me?.id }
+    val credits = o.credits()
+
+    if (toConfirm.isNotEmpty()) {
+        item { SectionHeader("Waiting for your confirmation") }
+        item {
+            SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
+                toConfirm.forEachIndexed { i, p ->
+                    if (i > 0) Divider16()
+                    Row(Modifier.fillMaxWidth().padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Avatar(initials("", p.payerUsername), p.payer, 40.dp)
+                        Column(Modifier.weight(1f)) {
+                            Text("${p.payerUsername} says they paid you", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
+                            Text("${formatRs(p.amount.toMoney())} · ${p.groupName}", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall)
+                        }
+                        SmallButton("Confirm", { onConfirm(p) })
+                    }
+                }
+            }
+        }
+    }
+
+    item { SectionHeader("You owe") }
+    if (debts.isEmpty()) item { EmptyState("You don't owe anyone. 🎉") }
+    else item {
+        SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
+            debts.forEachIndexed { i, d ->
+                if (i > 0) Divider16()
+                Row(Modifier.fillMaxWidth().padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Avatar(initials("", d.payeeName), d.payeeId, 40.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text("You owe ${d.payeeName}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
+                        Text(d.groupName + if (d.pending.signum() > 0) " · ${formatRs(d.pending)} awaiting confirmation" else "", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(formatRs(d.remaining), color = MaterialTheme.split.owe, style = MaterialTheme.typography.titleMedium)
+                        if (d.remaining.signum() > 0) SmallButton("Settle up", { onSettle(SettleTarget(d.groupId, d.groupName, d.payeeId, d.payeeName, d.remaining.toPlainString())) })
+                    }
+                }
+            }
+        }
+    }
+
+    if (sentPending.isNotEmpty()) {
+        item { SectionHeader("Waiting for them to confirm") }
+        item {
+            SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
+                sentPending.forEachIndexed { i, p ->
+                    if (i > 0) Divider16()
+                    Row(Modifier.fillMaxWidth().padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text("You paid ${p.payeeUsername}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
+                            Text("${formatRs(p.amount.toMoney())} · ${p.groupName}", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall)
+                        }
+                        SmallButton("Cancel", { onCancel(p) }, primary = false)
+                    }
+                }
+            }
+        }
+    }
+
+    if (credits.isNotEmpty()) {
+        item { SectionHeader("Owed to you") }
+        item {
+            SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
+                credits.forEachIndexed { i, c ->
+                    if (i > 0) Divider16()
+                    Row(Modifier.fillMaxWidth().padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("${c.fromName} owes you", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium))
+                            Text(c.groupName, color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text(formatRs(c.amount), color = MaterialTheme.split.owed, style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+            }
         }
     }
 }

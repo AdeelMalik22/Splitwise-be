@@ -115,6 +115,8 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int) {
                         onOpenActivity = { nav.navigate("activity") },
                         onRespond = overviewVm::respond,
                         onCreateGroup = { showCreateGroup = true },
+                        onSettleUp = { nav.navigate("settle") },
+                        onConfirmPayment = overviewVm::confirmPayment,
                     )
                 }
             }
@@ -164,6 +166,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int) {
                     onEditExpense = { e -> nav.navigate("add?group=$id&edit=${e.id}") },
                     isAdmin = ready?.groups?.firstOrNull { it.id == id }?.createdBy == userId,
                     onDeleteGroup = { overviewVm.deleteGroup(id) { nav.popBackStack("home", false) } },
+                    onOpenSettleHub = { nav.navigate("settle") },
                 )
             }
             composable(
@@ -216,6 +219,12 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int) {
                         onPay = { g, to, amt -> overviewVm.pay(g, to, amt) { nav.popBackStack() } },
                         onConfirm = overviewVm::confirmPayment, onCancel = overviewVm::cancelPayment,
                         onBack = { nav.popBackStack() },
+                        onSettle = { t ->
+                            nav.navigate(
+                                "settle?group=${t.groupId}&gname=${android.net.Uri.encode(t.groupName)}&to=${t.payeeId}" +
+                                    "&pname=${android.net.Uri.encode(t.payeeName)}&amount=${t.owed}"
+                            )
+                        },
                     )
                 }
             }

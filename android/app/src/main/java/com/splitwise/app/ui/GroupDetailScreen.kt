@@ -39,7 +39,7 @@ import java.math.BigDecimal
 fun GroupDetailScreen(
     vm: GroupDetailViewModel, groupId: Int, title: String, userId: Int?, onBack: () -> Unit, onAddExpense: () -> Unit,
     onSettle: (SettleTarget) -> Unit, onLeave: () -> Unit, emoji: String, onSettings: () -> Unit, onEditExpense: (Expense) -> Unit,
-    isAdmin: Boolean, onDeleteGroup: () -> Unit,
+    isAdmin: Boolean, onDeleteGroup: () -> Unit, onOpenSettleHub: () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -90,7 +90,7 @@ fun GroupDetailScreen(
             val members = (state.members as? Load.Ready)?.data.orEmpty()
             val expenses = (state.expenses as? Load.Ready)?.data.orEmpty()
             val settlements = (state.settlements as? Load.Ready)?.data
-            GroupHeader(emoji, title, members, expenses, settlements)
+            GroupHeader(emoji, title, members, expenses, settlements, onOpenSettleHub)
             TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.primary) {
                 listOf("Expenses", "Balances", "Members").forEachIndexed { i, label ->
                     Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label, style = MaterialTheme.typography.titleSmall) },
@@ -181,7 +181,7 @@ private fun ExpenseSheet(e: Expense, members: List<Member>, userId: Int?, onDism
 }
 
 @Composable
-private fun GroupHeader(emoji: String, title: String, members: List<Member>, expenses: List<Expense>, s: Settlements?) {
+private fun GroupHeader(emoji: String, title: String, members: List<Member>, expenses: List<Expense>, s: Settlements?, onSettleHub: () -> Unit) {
     val c = MaterialTheme.split
     val total = expenses.fold(BigDecimal.ZERO) { a, e -> a + e.amount.toMoney() }
     val owe = s?.youOwe.orEmpty().fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
@@ -203,6 +203,7 @@ private fun GroupHeader(emoji: String, title: String, members: List<Member>, exp
             Stat("You owe", formatRs(owe), c.owe, Modifier.weight(1f))
             Stat("You get", formatRs(owed), c.owed, Modifier.weight(1f))
         }
+        if (owe.signum() > 0) Box(Modifier.padding(16.dp, 0.dp, 16.dp, 16.dp)) { PrimaryButton("Settle up", onSettleHub) }
     }
 }
 

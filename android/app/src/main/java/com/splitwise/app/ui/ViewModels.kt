@@ -88,7 +88,33 @@ data class Overview(
             s.youOwe.fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
     }
     fun pendingFor(userId: Int?) = invites.filter { it.status == "pending" && it.invitee == userId }
+
+    /** Debts across all groups. [Debt.remaining] already subtracts payments waiting for confirmation. */
+    fun debts(): List<Debt> {
+        val myId = me?.id ?: return emptyList()
+        return groups.flatMap { g ->
+            val people = members[g.id].orEmpty()
+            balances[g.id]?.youOwe.orEmpty().mapNotNull { line ->
+                val payee = people.firstOrNull { it.username == line.toUser } ?: return@mapNotNull null
+                val pending = payments.filter { it.status == "pending" && it.group == g.id && it.payer == myId && it.payee == payee.id }
+                    .fold(BigDecimal.ZERO) { a, p -> a + p.amount.toMoney() }
+                Debt(g.id, g.name, payee.id, payee.username, line.amount.toMoney(), pending)
+            }
+        }
+    }
+
+    fun credits(): List<Credit> = groups.flatMap { g ->
+        balances[g.id]?.owedToYou.orEmpty().map { Credit(g.name, it.fromUser.orEmpty(), it.amount.toMoney()) }
+    }
+
+    fun awaitingMyConfirmation(): List<Payment> = payments.filter { it.status == "pending" && it.payee == me?.id }
 }
+
+data class Debt(val groupId: Int, val groupName: String, val payeeId: Int, val payeeName: String, val amount: BigDecimal, val pending: BigDecimal) {
+    val remaining: BigDecimal get() = (amount - pending).max(BigDecimal.ZERO)
+}
+
+data class Credit(val groupName: String, val fromName: String, val amount: BigDecimal)
 
 class OverviewViewModel(private val repo: Repository) : ViewModel() {
     private val _state = MutableStateFlow<Load<Overview>>(Load.Loading)

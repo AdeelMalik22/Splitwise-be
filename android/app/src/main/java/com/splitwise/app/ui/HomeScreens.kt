@@ -26,7 +26,7 @@ import java.math.BigDecimal
 // ───────────────────────── Home ─────────────────────────
 
 @Composable
-fun HomeScreen(overview: Overview, userId: Int?, onOpenGroup: (Group) -> Unit, onOpenGroups: () -> Unit, onOpenInvites: () -> Unit, onOpenActivity: () -> Unit, onRespond: (com.splitwise.app.data.Invite, Boolean) -> Unit, onCreateGroup: () -> Unit) {
+fun HomeScreen(overview: Overview, userId: Int?, onOpenGroup: (Group) -> Unit, onOpenGroups: () -> Unit, onOpenInvites: () -> Unit, onOpenActivity: () -> Unit, onRespond: (com.splitwise.app.data.Invite, Boolean) -> Unit, onCreateGroup: () -> Unit, onSettleUp: () -> Unit, onConfirmPayment: (com.splitwise.app.data.Payment) -> Unit) {
     val me = overview.me
     val pending = overview.pendingFor(userId)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -43,7 +43,8 @@ fun HomeScreen(overview: Overview, userId: Int?, onOpenGroup: (Group) -> Unit, o
             item { EmptyHome(onCreateGroup) }
             return@LazyColumn
         }
-        item { BalanceCard(overview) }
+        item { BalanceCard(overview, onSettleUp) }
+        overview.awaitingMyConfirmation().take(2).forEach { p -> item(key = "confirm${p.id}") { ConfirmBanner(p, onConfirmPayment, onSettleUp) } }
         if (pending.isNotEmpty()) item { InviteBanner(pending.first(), pending.size, onRespond, onOpenInvites) }
         item { SectionHeader("Your Groups", link = "See all", onLink = onOpenGroups) }
         item {
@@ -73,7 +74,7 @@ fun HomeScreen(overview: Overview, userId: Int?, onOpenGroup: (Group) -> Unit, o
 }
 
 @Composable
-private fun BalanceCard(o: Overview) {
+private fun BalanceCard(o: Overview, onSettleUp: () -> Unit) {
     val owe = o.owe(); val owed = o.owed(); val net = owed - owe
     Box(
         Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.primary),
@@ -96,6 +97,11 @@ private fun BalanceCard(o: Overview) {
                 Box(Modifier.width(1.dp).height(36.dp).background(Color.White.copy(alpha = 0.15f)))
                 BalanceCell("Owed to you", formatRs(owed), Color(0xFF86EFAC), Modifier.weight(1f).padding(start = 16.dp))
             }
+            Box(
+                Modifier.padding(top = 16.dp).fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp))
+                    .background(Color.White.copy(alpha = 0.18f)).clickable(onClick = onSettleUp),
+                contentAlignment = Alignment.Center,
+            ) { Text(if (owe.signum() > 0) "Settle up" else "Payments", color = Color.White, style = MaterialTheme.typography.titleSmall) }
         }
     }
 }
@@ -105,6 +111,22 @@ private fun BalanceCell(label: String, value: String, color: Color, modifier: Mo
     Column(modifier) {
         Text(label, color = Color.White.copy(alpha = 0.65f), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium))
         Text(value, Modifier.padding(top = 4.dp), color = color, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+    }
+}
+
+@Composable
+private fun ConfirmBanner(p: com.splitwise.app.data.Payment, onConfirm: (com.splitwise.app.data.Payment) -> Unit, onOpen: () -> Unit) {
+    val c = MaterialTheme.split
+    Row(
+        Modifier.padding(16.dp, 16.dp, 16.dp, 0.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.oweBg)
+            .clickable(onClick = onOpen).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("${p.payerUsername} paid you ${formatRs(p.amount.toMoney())}", style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp))
+            Text("${p.groupName} · confirm once you've received it", color = c.fg2, style = MaterialTheme.typography.bodySmall)
+        }
+        SmallButton("Confirm", { onConfirm(p) })
     }
 }
 
