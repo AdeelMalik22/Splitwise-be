@@ -123,9 +123,14 @@ data class AppNotification(
 @Serializable
 data class ActivityItem(
     val id: Int,
+    val actor: Int = 0,
+    @SerialName("actor_username") val actorUsername: String = "",
+    @SerialName("actor_name") val actorName: String = "",
     val action: String,
     @SerialName("entity_type") val entityType: String,
     @SerialName("entity_id") val entityId: Int? = null,
+    @SerialName("group_id") val groupId: Int? = null,
+    val metadata: Map<String, String> = emptyMap(),
     @SerialName("created_at") val createdAt: String = "",
 )
 

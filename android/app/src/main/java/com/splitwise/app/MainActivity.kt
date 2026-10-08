@@ -128,7 +128,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int) {
                     )
                 }
             }
-            composable("activity") { TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { ActivityScreen(it, overviewVm::markRead) } }
+            composable("activity") { TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { ActivityScreen(it, overviewVm::markRead) { g -> nav.navigate("group/${g.id}?name=${android.net.Uri.encode(g.name)}") } } }
             composable("account") {
                 TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) {
                     AccountScreen(

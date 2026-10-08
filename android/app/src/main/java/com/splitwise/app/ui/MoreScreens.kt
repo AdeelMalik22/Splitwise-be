@@ -296,7 +296,7 @@ private fun InviteCard(invite: Invite, received: Boolean, onRespond: (Invite, Bo
 // ───────────────────────── Activity ─────────────────────────
 
 @Composable
-fun ActivityScreen(overview: Overview, onMarkRead: (com.splitwise.app.data.AppNotification) -> Unit) {
+fun ActivityScreen(overview: Overview, onMarkRead: (com.splitwise.app.data.AppNotification) -> Unit, onOpenGroup: (Group) -> Unit) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val unread = overview.notifications.filter { it.readAt == null }
     Column(Modifier.fillMaxSize()) {
@@ -313,9 +313,13 @@ fun ActivityScreen(overview: Overview, onMarkRead: (com.splitwise.app.data.AppNo
                 if (overview.activity.isEmpty()) item { EmptyState("Your actions will show up here.") }
                 else item {
                     SplitCard {
+                        val groupIds = overview.groups.map { it.id }.toSet()
                         overview.activity.forEachIndexed { i, a ->
                             if (i > 0) Divider16()
-                            NotificationRow("You ${a.action} ${a.entityType}${a.entityId?.let { " #$it" } ?: ""}", dayLabel(a.createdAt), unread = false)
+                            val target = activityGroupId(a, groupIds)?.let { id -> overview.groups.firstOrNull { it.id == id } }
+                            Box(Modifier.then(if (target != null) Modifier.clickable { onOpenGroup(target) } else Modifier)) {
+                                NotificationRow(describeActivity(a, overview.me?.id), dayLabel(a.createdAt), unread = false)
+                            }
                         }
                     }
                 }

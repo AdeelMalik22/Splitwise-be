@@ -56,12 +56,16 @@ fun HomeScreen(overview: Overview, userId: Int?, onOpenGroup: (Group) -> Unit, o
         }
         item { SectionHeader("Recent Activity", link = "All activity", onLink = onOpenActivity) }
         item {
-            val recent = overview.notifications.take(3)
+            val recent = overview.activity.take(5)
+            val groupIds = overview.groups.map { it.id }.toSet()
             SplitCard(Modifier.padding(horizontal = 16.dp)) {
                 if (recent.isEmpty()) EmptyState("No activity yet.")
-                recent.forEachIndexed { i, n ->
+                recent.forEachIndexed { i, a ->
                     if (i > 0) Divider16()
-                    NotificationRow(n.message, dayLabel(n.createdAt), unread = n.readAt == null)
+                    val target = activityGroupId(a, groupIds)?.let { id -> overview.groups.firstOrNull { it.id == id } }
+                    Box(Modifier.then(if (target != null) Modifier.clickable { onOpenGroup(target) } else Modifier)) {
+                        NotificationRow(describeActivity(a, overview.me?.id), dayLabel(a.createdAt), unread = false)
+                    }
                 }
             }
         }
