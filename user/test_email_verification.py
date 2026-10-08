@@ -93,3 +93,30 @@ class EmailVerificationTests(APITestCase):
     def test_existing_and_admin_accounts_are_verified(self):
         admin = User.objects.create_superuser(username='boss', email='boss@example.com', password='password-123')
         self.assertTrue(admin.email_verified)
+
+
+class EmailConfigurationTests(APITestCase):
+    def test_console_backend_in_production_is_reported_and_not_called_sent(self):
+        from user.emails import send_email
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.console.EmailBackend', DEBUG=False):
+            with self.assertLogs('user.emails', level='ERROR'):
+                self.assertFalse(send_email('a@example.com', 'x', 'y'))
+            health = self.client.get('/health/').data
+        self.assertFalse(health['email']['delivering'])
+        self.assertIn('console', health['email']['problem'])
+
+    def test_smtp_without_credentials_names_the_missing_settings(self):
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend', EMAIL_HOST='smtp.gmail.com',
+                               EMAIL_HOST_USER='', EMAIL_HOST_PASSWORD=''):
+            problem = self.client.get('/health/').data['email']['problem']
+        self.assertIn('EMAIL_HOST_USER', problem)
+        self.assertIn('EMAIL_HOST_PASSWORD', problem)
+        self.assertNotIn('smtp.gmail.com', problem)
+
+    def test_a_fully_configured_smtp_server_reports_delivering_and_leaks_nothing(self):
+        with override_settings(EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend', EMAIL_HOST='smtp.gmail.com',
+                               EMAIL_HOST_USER='me@gmail.com', EMAIL_HOST_PASSWORD='supersecretpassword'):
+            body = self.client.get('/health/').content.decode()
+        self.assertIn('"delivering":true', body.replace(' ', ''))
+        self.assertNotIn('supersecretpassword', body)
+        self.assertNotIn('me@gmail.com', body)

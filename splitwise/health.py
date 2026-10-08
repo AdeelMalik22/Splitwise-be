@@ -4,6 +4,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from user.emails import email_status
+
 
 class HealthCheckView(APIView):
     permission_classes = [AllowAny]
@@ -23,6 +25,6 @@ class HealthCheckView(APIView):
             pass
         healthy = all(checks.values())
         return Response(
-            {'status': 'ok' if healthy else 'degraded', 'checks': checks},
+            {'status': 'ok' if healthy else 'degraded', 'checks': checks, 'email': email_status()},
             status=200 if healthy else 503,
         )

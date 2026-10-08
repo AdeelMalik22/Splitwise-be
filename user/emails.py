@@ -34,8 +34,27 @@ def read_verify_token(token):
     return User.objects.filter(pk=data.get('uid'), email=data.get('email')).first()
 
 
+CONSOLE_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+
+def email_status():
+    """What /health/ reports: can this server really deliver email? (never includes credentials)"""
+    backend = settings.EMAIL_BACKEND
+    if backend == CONSOLE_BACKEND:
+        return {'delivering': False, 'problem': 'EMAIL_BACKEND is the console backend: emails are only printed in the server log'}
+    if backend.endswith('smtp.EmailBackend'):
+        missing = [n for n in ('EMAIL_HOST', 'EMAIL_HOST_USER', 'EMAIL_HOST_PASSWORD') if not getattr(settings, n, '')]
+        if missing:
+            return {'delivering': False, 'problem': 'missing settings: ' + ', '.join(missing)}
+    return {'delivering': True}
+
+
 def send_email(to, subject, text, html=None):
     """Sends an email; returns False (and logs) instead of raising so a mail outage never breaks the API."""
+    if settings.EMAIL_BACKEND == CONSOLE_BACKEND and not settings.DEBUG:
+        # In production the console backend only prints the message; claiming it was "sent" would be a lie.
+        logger.error('Email NOT sent to %s: EMAIL_* settings are not loaded in this server process', to)
+        return False
     try:
         send_mail(subject, text, settings.DEFAULT_FROM_EMAIL, [to], html_message=html, fail_silently=False)
         return True
