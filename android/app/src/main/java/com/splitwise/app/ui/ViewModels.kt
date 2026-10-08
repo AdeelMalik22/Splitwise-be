@@ -38,6 +38,22 @@ class AuthViewModel(private val repo: Repository) : ViewModel() {
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
+    val biometric = repo.biometric
+
+    /** [refresh] was unlocked by the fingerprint; exchanges it for a session. */
+    fun loginWithRefresh(refresh: String) {
+        if (_state.value.busy) return
+        _state.update { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            _state.value = repo.loginWithRefresh(refresh).fold({ State() }, { State(error = it.userMessage()) })
+        }
+    }
+
+    fun biometricFailed(message: String) = _state.update { it.copy(error = message) }
+    fun biometricInvalidated() {
+        viewModelScope.launch { repo.clearBiometric() }
+        _state.update { it.copy(error = "Your phone's fingerprints changed. Log in with your password, then turn fingerprint login on again.") }
+    }
 
     fun login(username: String, password: String) {
         if (username.isBlank() || password.isEmpty()) return fail("Enter your username and password.")
@@ -119,6 +135,12 @@ class SessionViewModel(private val repo: Repository) : ViewModel() {
     val darkMode = repo.darkMode
     val alertsOn = repo.alertsOn
     val pendingInvite = repo.pendingInvite
+    val biometric = repo.biometric
+    val biometricOffered = repo.biometricOffered
+    suspend fun refreshToken() = repo.currentRefreshToken()
+    fun saveBiometric(blob: ByteArray, iv: ByteArray) { viewModelScope.launch { repo.saveBiometric(blob, iv, repo.currentUsername().orEmpty()) } }
+    fun disableBiometric() { viewModelScope.launch { repo.clearBiometric() } }
+    fun markBiometricOffered() { viewModelScope.launch { repo.markBiometricOffered() } }
     fun setPendingInvite(token: String?) { viewModelScope.launch { repo.setPendingInvite(token) } }
     fun setAlertsOn(on: Boolean) { viewModelScope.launch { repo.setAlertsOn(on) } }
     fun setDarkMode(dark: Boolean) { viewModelScope.launch { repo.setDarkMode(dark) } }
@@ -246,6 +268,7 @@ class OverviewViewModel(private val repo: Repository) : ViewModel() {
     }
 
     fun messageShown() { _message.value = null }
+    fun showMessage(text: String) { _message.value = text }
 
     private fun <T> act(result: suspend () -> Result<T>, success: String? = null, onDone: () -> Unit = {}) {
         viewModelScope.launch {

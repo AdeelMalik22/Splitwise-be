@@ -83,6 +83,23 @@ private fun LoginForm(vm: AuthViewModel, justVerified: Boolean, onRegister: () -
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val enrollment by vm.biometric.collectAsStateWithLifecycle(initialValue = null)
+    val fingerprint = enrollment?.takeIf { Biometric.state(context) == BiometricState.Ready }
+    val unlockWithFingerprint: () -> Unit = {
+        val e = fingerprint
+        val activity = context.findFragmentActivity()
+        if (e != null && activity != null) Biometric.decrypt(
+            activity, e.blob, e.iv,
+            onDone = { vm.loginWithRefresh(String(it)) },
+            onError = vm::biometricFailed,
+            onInvalidated = vm::biometricInvalidated,
+        )
+    }
+    // Ask for the fingerprint once when the app opens signed out.
+    var prompted by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(fingerprint != null) { if (fingerprint != null && !prompted && !justVerified) { prompted = true; unlockWithFingerprint() } }
+
     Column(
         Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).imePadding(),
     ) {
@@ -114,6 +131,16 @@ private fun LoginForm(vm: AuthViewModel, justVerified: Boolean, onRegister: () -
                 color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
             )
             PrimaryButton("Log In", { vm.login(username, password) }, busy = state.busy, modifier = Modifier.padding(top = 4.dp))
+            if (fingerprint != null) {
+                OutlinedButton(
+                    onClick = unlockWithFingerprint, enabled = !state.busy,
+                    modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp),
+                ) {
+                    Icon(Icons.Default.Fingerprint, null, Modifier.size(22.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (fingerprint!!.username.isNotBlank()) "Log in as ${fingerprint!!.username} with fingerprint" else "Log in with fingerprint", style = MaterialTheme.typography.titleSmall)
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
                 Text("Don't have an account? ", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp))
                 Text("Create account", Modifier.clickable(onClick = onRegister), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))

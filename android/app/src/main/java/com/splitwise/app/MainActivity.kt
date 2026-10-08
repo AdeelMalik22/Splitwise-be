@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -42,7 +43,7 @@ fun parseDeepLink(uri: android.net.Uri?): DeepLink? {
     }
 }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
     private val deepLink = mutableStateOf<DeepLink?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,6 +104,32 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pend
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
     val tab = tabRoutes[route]
     var showCreateGroup by remember { mutableStateOf(false) }
+
+    // Fingerprint login: enrolment (after a password login) and the one-time offer.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val enrolled by session.biometric.collectAsStateWithLifecycle(initialValue = null)
+    val offered by session.biometricOffered.collectAsStateWithLifecycle(initialValue = true)
+    val enrollFingerprint: () -> Unit = {
+        val activity = context.findFragmentActivity()
+        scope.launch {
+            val refresh = session.refreshToken()
+            if (activity != null && refresh != null) {
+                Biometric.encrypt(activity, refresh.toByteArray(), onDone = { blob, iv -> session.saveBiometric(blob, iv) },
+                    onError = { overviewVm.showMessage(it) })
+            }
+        }
+    }
+    if (!offered && enrolled == null && Biometric.state(context) == BiometricState.Ready) {
+        AlertDialog(
+            onDismissRequest = { session.markBiometricOffered() },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Log in with your fingerprint?") },
+            text = { Text("Skip typing your password next time. You can change this any time in Account.") },
+            confirmButton = { TextButton(onClick = { session.markBiometricOffered(); enrollFingerprint() }) { Text("Turn on") } },
+            dismissButton = { TextButton(onClick = { session.markBiometricOffered() }) { Text("Not now") } },
+        )
+    }
     LaunchedEffect(pendingInvite) { if (pendingInvite != null) nav.navigate("join") { launchSingleTop = true } }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); overviewVm.messageShown() } }
@@ -163,6 +190,9 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pend
                 TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) {
                     AccountScreen(
                         it, isDark, session::setDarkMode, alertsOn, session::setAlertsOn, session::logout,
+                        fingerprint = Biometric.state(androidx.compose.ui.platform.LocalContext.current),
+                        fingerprintOn = enrolled != null,
+                        onFingerprintChange = { on -> if (on) enrollFingerprint() else session.disableBiometric() },
                         onEditProfile = { nav.navigate("profile/edit") },
                         onChangePassword = { nav.navigate("profile/password") },
                         onPayments = { nav.navigate("settle") },

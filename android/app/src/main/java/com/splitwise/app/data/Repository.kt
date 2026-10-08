@@ -78,6 +78,28 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
 
     suspend fun logout() = tokens.clear()
 
+    val biometric = tokens.biometric
+    val biometricOffered = tokens.biometricOffered
+    suspend fun markBiometricOffered() = tokens.setBiometricOffered()
+    suspend fun currentRefreshToken() = tokens.refreshToken()
+    suspend fun currentUsername() = tokens.username()
+    suspend fun saveBiometric(blob: ByteArray, iv: ByteArray, username: String) = tokens.saveBiometric(blob, iv, username)
+    suspend fun clearBiometric() = tokens.clearBiometric()
+
+    /** Signs in with the refresh token unlocked by the fingerprint; an expired one removes the enrolment. */
+    suspend fun loginWithRefresh(refresh: String) = call {
+        val fresh = try {
+            clients.auth.refresh(RefreshRequest(refresh))
+        } catch (e: HttpException) {
+            if (e.code() == 401) {
+                tokens.clearBiometric()
+                throw IllegalStateException("Fingerprint login expired. Log in with your password, then turn it on again.")
+            }
+            throw e
+        }
+        tokens.save(fresh.access, fresh.refresh ?: refresh)
+    }
+
     suspend fun groups() = call { api.groups().results }
     suspend fun createGroup(name: String, description: String, icon: String = "") =
         call { api.createGroup(GroupRequest(name.trim(), description.trim(), icon)) }
@@ -138,6 +160,7 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     suspend fun changePassword(old: String, new: String) = call { api.changePassword(ChangePasswordRequest(old, new)) }
     suspend fun deleteAccount(password: String) = call {
         api.deleteAccount(DeleteAccountRequest(password))
+        tokens.clearBiometric()
         tokens.clear()
     }
 

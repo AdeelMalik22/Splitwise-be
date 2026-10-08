@@ -18,6 +18,8 @@ import kotlinx.serialization.json.jsonPrimitive
 
 private val Context.dataStore by preferencesDataStore(name = "session")
 
+class BiometricEnrollment(val blob: ByteArray, val iv: ByteArray, val username: String)
+
 /** Persists the JWT pair and the signed-in user's id. */
 class TokenStore(private val context: Context) {
     private val accessKey = stringPreferencesKey("access")
@@ -29,6 +31,41 @@ class TokenStore(private val context: Context) {
     /** Show the unread badge on the Activity tab. A device setting like dark mode. */
     val alertsOn: Flow<Boolean> = context.dataStore.data.map { it[alertsKey] ?: true }
     suspend fun setAlertsOn(on: Boolean) { context.dataStore.edit { it[alertsKey] = on } }
+
+    private val bioBlobKey = stringPreferencesKey("bio_blob")
+    private val bioIvKey = stringPreferencesKey("bio_iv")
+    private val bioUserKey = stringPreferencesKey("bio_user")
+    private val bioOfferedKey = booleanPreferencesKey("bio_offered")
+
+    /** Present once the user enrolled a fingerprint; holds the refresh token encrypted by [BiometricVault]. */
+    val biometric: Flow<BiometricEnrollment?> = context.dataStore.data.map { p ->
+        val blob = p[bioBlobKey]; val iv = p[bioIvKey]
+        if (blob != null && iv != null) BiometricEnrollment(decode(blob), decode(iv), p[bioUserKey].orEmpty()) else null
+    }
+    val biometricOffered: Flow<Boolean> = context.dataStore.data.map { it[bioOfferedKey] ?: false }
+
+    suspend fun saveBiometric(blob: ByteArray, iv: ByteArray, username: String) {
+        context.dataStore.edit { it[bioBlobKey] = encode(blob); it[bioIvKey] = encode(iv); it[bioUserKey] = username }
+    }
+
+    suspend fun clearBiometric() {
+        context.dataStore.edit { it.remove(bioBlobKey); it.remove(bioIvKey); it.remove(bioUserKey) }
+        BiometricVault.delete()
+    }
+
+    suspend fun setBiometricOffered() { context.dataStore.edit { it[bioOfferedKey] = true } }
+
+    suspend fun refreshToken(): String? = context.dataStore.data.first()[refreshKey]
+    suspend fun username(): String? = context.dataStore.data.first()[accessKey]?.let(::jwtUsername)
+
+    private fun encode(b: ByteArray) = Base64.encodeToString(b, Base64.NO_WRAP)
+    private fun decode(s: String) = Base64.decode(s, Base64.NO_WRAP)
+
+    private fun jwtUsername(token: String): String? = runCatching {
+        val payload = token.split('.')[1]
+        val json = String(Base64.decode(payload, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP))
+        Json.parseToJsonElement(json).jsonObject["username"]?.jsonPrimitive?.content
+    }.getOrNull()
 
     private val inviteKey = stringPreferencesKey("pending_invite")
     /** An invitation link opened before sign-in; kept until it is used or dismissed, even across email verification. */

@@ -375,6 +375,7 @@ fun ActivityScreen(overview: Overview, onMarkRead: (com.splitwise.app.data.AppNo
 fun AccountScreen(
     overview: Overview, dark: Boolean, onDarkChange: (Boolean) -> Unit, alertsOn: Boolean, onAlertsChange: (Boolean) -> Unit, onLogout: () -> Unit,
     onEditProfile: () -> Unit, onChangePassword: () -> Unit, onPayments: () -> Unit, onDeleteAccount: (String) -> Unit,
+    fingerprint: BiometricState = BiometricState.Unavailable, fingerprintOn: Boolean = false, onFingerprintChange: (Boolean) -> Unit = {},
 ) {
     val me = overview.me
     val c = MaterialTheme.split
@@ -400,6 +401,20 @@ fun AccountScreen(
                     Text("Switch to dark theme", color = c.fg2, style = MaterialTheme.typography.bodySmall)
                 }
                 Switch(dark, onDarkChange, colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary))
+            }
+            if (fingerprint != BiometricState.Unavailable) {
+                Divider16()
+                Row(Modifier.padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Fingerprint login", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
+                        Text(
+                            if (fingerprint == BiometricState.NotEnrolled) "Add a fingerprint in your phone's Settings first" else "Skip the password on this phone",
+                            color = c.fg2, style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Switch(fingerprintOn, onFingerprintChange, enabled = fingerprint == BiometricState.Ready || fingerprintOn,
+                        colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary))
+                }
             }
             Divider16()
             Row(Modifier.padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
