@@ -1,5 +1,6 @@
 package com.splitwise.app.ui
 
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -99,7 +100,7 @@ fun SmallButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
 fun IconField(
     value: String, onChange: (String) -> Unit, label: String, icon: ImageVector,
     modifier: Modifier = Modifier, password: Boolean = false, error: Boolean = false,
-    keyboard: KeyboardType = KeyboardType.Text,
+    keyboard: KeyboardType = KeyboardType.Text, onDone: (() -> Unit)? = null,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
@@ -110,7 +111,11 @@ fun IconField(
             shape = RoundedCornerShape(12.dp),
             isError = error,
             visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboard),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (password) KeyboardType.Password else keyboard,
+                imeAction = if (onDone != null) androidx.compose.ui.text.input.ImeAction.Done else androidx.compose.ui.text.input.ImeAction.Next,
+            ),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone?.invoke() }),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.surface,
                 unfocusedContainerColor = MaterialTheme.split.input,
@@ -181,7 +186,7 @@ fun Divider16() = HorizontalDivider(Modifier.padding(horizontal = 16.dp), color 
 @Composable
 fun <T> LoadView(load: Load<T>, onRetry: () -> Unit, modifier: Modifier = Modifier, content: @Composable (T) -> Unit) {
     when (load) {
-        Load.Loading -> Box(modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.primary) }
+        Load.Loading -> SkeletonList(modifier)
         is Load.Error -> Column(
             modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,
@@ -242,5 +247,29 @@ fun BottomBar(selected: Tab, onSelect: (Tab) -> Unit, onAdd: () -> Unit, unread:
                 .border(3.dp, MaterialTheme.colorScheme.surface, CircleShape).clickable(onClick = onAdd),
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Default.Add, "Add expense", Modifier.size(24.dp), tint = Color.White) }
+    }
+}
+
+/** Shimmering placeholder rows shown while a screen loads. */
+@Composable
+fun SkeletonList(modifier: Modifier = Modifier, rows: Int = 5) {
+    val alpha by androidx.compose.animation.core.rememberInfiniteTransition(label = "skeleton").animateFloat(
+        initialValue = 0.45f, targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(800), androidx.compose.animation.core.RepeatMode.Reverse,
+        ), label = "alpha",
+    )
+    val block = MaterialTheme.split.input
+    Column(modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Box(Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(20.dp)).background(block.copy(alpha = alpha)))
+        repeat(rows) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(block.copy(alpha = alpha)))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.width(180.dp).height(12.dp).clip(RoundedCornerShape(6.dp)).background(block.copy(alpha = alpha)))
+                    Box(Modifier.width(100.dp).height(10.dp).clip(RoundedCornerShape(6.dp)).background(block.copy(alpha = alpha)))
+                }
+            }
+        }
     }
 }

@@ -277,10 +277,14 @@ fun ActivityScreen(overview: Overview, onMarkRead: (com.splitwise.app.data.AppNo
 // ───────────────────────── Account ─────────────────────────
 
 @Composable
-fun AccountScreen(overview: Overview, dark: Boolean, onDarkChange: (Boolean) -> Unit, onLogout: () -> Unit) {
+fun AccountScreen(
+    overview: Overview, dark: Boolean, onDarkChange: (Boolean) -> Unit, onLogout: () -> Unit,
+    onEditProfile: () -> Unit, onChangePassword: () -> Unit, onPayments: () -> Unit, onDeleteAccount: (String) -> Unit,
+) {
     val me = overview.me
     val c = MaterialTheme.split
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         NavBar("Account", onBack = null)
         if (me != null) SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
@@ -310,14 +314,23 @@ fun AccountScreen(overview: Overview, dark: Boolean, onDarkChange: (Boolean) -> 
                 }
             }
         }
-        Spacer(Modifier.height(24.dp))
-        Box(
-            Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp))
-                .border(1.5.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f), RoundedCornerShape(16.dp)).clickable { confirmLogout = true },
-            contentAlignment = Alignment.Center,
-        ) { Text("Log Out", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge) }
+        SectionHeader("Account")
+        SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
+            NavRow("Edit Profile", "Name and email", onEditProfile)
+            Divider16()
+            NavRow("Change Password", "Update your password", onChangePassword)
+            Divider16()
+            NavRow("Payment History", "Payments you sent and received", onPayments)
+        }
+        SectionHeader("Danger Zone")
+        SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
+            NavRow("Log Out", null, { confirmLogout = true }, danger = true)
+            Divider16()
+            NavRow("Delete Account", "Permanently remove your data", { confirmDelete = true }, danger = true)
+        }
         Spacer(Modifier.height(24.dp))
     }
+    if (confirmDelete) DeleteAccountDialog(onDismiss = { confirmDelete = false }, onConfirm = { confirmDelete = false; onDeleteAccount(it) })
     if (confirmLogout) AlertDialog(
         onDismissRequest = { confirmLogout = false },
         containerColor = MaterialTheme.colorScheme.surface,
@@ -325,5 +338,35 @@ fun AccountScreen(overview: Overview, dark: Boolean, onDarkChange: (Boolean) -> 
         text = { Text("You'll need to sign in again to see your groups.") },
         confirmButton = { TextButton(onClick = { confirmLogout = false; onLogout() }) { Text("Log Out", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun NavRow(title: String, subtitle: String?, onClick: () -> Unit, danger: Boolean = false) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp, 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
+            subtitle?.let { Text(it, color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall) }
+        }
+        Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.split.fg3)
+    }
+}
+
+@Composable
+private fun DeleteAccountDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var password by rememberSaveable { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Delete Account?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("This permanently deletes your account, your expenses and your memberships. This cannot be undone.")
+                OutlinedTextField(password, { password = it }, label = { Text("Enter your password") }, singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), shape = RoundedCornerShape(12.dp))
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(password) }, enabled = password.isNotEmpty()) { Text("Yes, delete my account", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

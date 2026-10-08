@@ -124,7 +124,15 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
             }
             composable("activity") { TabFrame(load, overviewVm::refresh) { ActivityScreen(it, overviewVm::markRead) } }
             composable("account") {
-                TabFrame(load, overviewVm::refresh) { AccountScreen(it, isDark, session::setDarkMode, session::logout) }
+                TabFrame(load, overviewVm::refresh) {
+                    AccountScreen(
+                        it, isDark, session::setDarkMode, session::logout,
+                        onEditProfile = { nav.navigate("profile/edit") },
+                        onChangePassword = { nav.navigate("profile/password") },
+                        onPayments = { nav.navigate("settle") },
+                        onDeleteAccount = overviewVm::deleteAccount,
+                    )
+                }
             }
             composable(
                 "group/{id}?name={name}",
@@ -138,6 +146,13 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
                     userId = userId,
                     onBack = { nav.popBackStack() },
                     onAddExpense = { nav.navigate("add?group=$id") },
+                    onSettle = { t ->
+                        nav.navigate(
+                            "settle?group=${t.groupId}&gname=${android.net.Uri.encode(t.groupName)}&to=${t.payeeId}" +
+                                "&pname=${android.net.Uri.encode(t.payeeName)}&amount=${t.owed}"
+                        )
+                    },
+                    onLeave = { overviewVm.leaveGroup(id) { nav.popBackStack("home", false) } },
                 )
             }
             composable("add?group={group}", arguments = listOf(navArgument("group") { type = NavType.IntType; defaultValue = -1 })) { entry ->
@@ -148,6 +163,37 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
                     userId = userId,
                     onBack = { overviewVm.refresh(silent = true); nav.popBackStack() },
                 )
+            }
+            composable(
+                "settle?group={group}&gname={gname}&to={to}&pname={pname}&amount={amount}",
+                arguments = listOf(
+                    navArgument("group") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("gname") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("to") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("pname") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("amount") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                val a = entry.arguments!!
+                val target = if (a.getInt("group") >= 0 && a.getInt("to") >= 0) {
+                    SettleTarget(a.getInt("group"), a.getString("gname").orEmpty(), a.getInt("to"), a.getString("pname").orEmpty(), a.getString("amount").orEmpty())
+                } else null
+                TabFrame(load, overviewVm::refresh) { o ->
+                    SettleUpScreen(
+                        o, userId, target,
+                        onPay = { g, to, amt -> overviewVm.pay(g, to, amt) { nav.popBackStack() } },
+                        onConfirm = overviewVm::confirmPayment, onCancel = overviewVm::cancelPayment,
+                        onBack = { nav.popBackStack() },
+                    )
+                }
+            }
+            composable("profile/edit") {
+                TabFrame(load, overviewVm::refresh) { o ->
+                    EditProfileScreen(o, onSave = { id, n, e -> overviewVm.updateProfile(id, n, e) { nav.popBackStack() } }, onBack = { nav.popBackStack() })
+                }
+            }
+            composable("profile/password") {
+                ChangePasswordScreen(onSave = { old, new -> overviewVm.changePassword(old, new) { nav.popBackStack() } }, onBack = { nav.popBackStack() })
             }
             composable("invites") {
                 TabFrame(load, overviewVm::refresh) { o ->

@@ -55,7 +55,7 @@ private fun LoginForm(vm: AuthViewModel, onRegister: () -> Unit) {
         state.error?.let { ErrorBanner(it, Modifier.padding(bottom = 20.dp)) }
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             IconField(username, { username = it }, "Username", Icons.Default.Person, error = state.error != null)
-            IconField(password, { password = it }, "Password", Icons.Default.Lock, password = true, error = state.error != null)
+            IconField(password, { password = it }, "Password", Icons.Default.Lock, password = true, error = state.error != null, onDone = { vm.login(username, password) })
             PrimaryButton("Log In", { vm.login(username, password) }, busy = state.busy, modifier = Modifier.padding(top = 4.dp))
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
                 Text("Don't have an account? ", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp))
@@ -83,7 +83,7 @@ private fun RegisterForm(vm: AuthViewModel, onLogin: () -> Unit) {
             IconField(username, { username = it }, "Username", Icons.Default.Person)
             IconField(email, { email = it }, "Email", Icons.Default.Email, keyboard = KeyboardType.Email)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconField(password, { password = it }, "Password", Icons.Default.Lock, password = true)
+                IconField(password, { password = it }, "Password", Icons.Default.Lock, password = true, onDone = { vm.register(username, name, email, password) })
                 if (password.isNotEmpty()) PasswordStrength(password)
             }
             PrimaryButton("Create Account", { vm.register(username, name, email, password) }, busy = state.busy, modifier = Modifier.padding(top = 8.dp))

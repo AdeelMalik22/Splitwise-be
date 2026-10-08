@@ -1,6 +1,8 @@
 package com.splitwise.app.data
 
 import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.PATCH
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -23,6 +25,20 @@ interface SplitwiseApi {
     @GET("expense/") suspend fun expenses(): List<Expense>
     @POST("expense/") suspend fun createExpense(@Body body: ExpenseRequest): Expense
     @GET("expense/{groupId}/settlements/") suspend fun settlements(@Path("groupId") groupId: Int): Settlements
+
+    @DELETE("expense/{id}/") suspend fun deleteExpense(@Path("id") id: Int)
+
+    @GET("usersgroup/") suspend fun memberships(): Page<Membership>
+    @DELETE("usersgroup/{id}/") suspend fun leaveGroup(@Path("id") id: Int)
+
+    @GET("payments/") suspend fun payments(): Page<Payment>
+    @POST("payments/") suspend fun createPayment(@Body body: PaymentRequest): Payment
+    @POST("payments/{id}/confirm/") suspend fun confirmPayment(@Path("id") id: Int): Payment
+    @DELETE("payments/{id}/") suspend fun cancelPayment(@Path("id") id: Int)
+
+    @PATCH("users/{id}/") suspend fun updateProfile(@Path("id") id: Int, @Body body: ProfileUpdate): Profile
+    @POST("users/change_password/") suspend fun changePassword(@Body body: ChangePasswordRequest)
+    @POST("users/delete_account/") suspend fun deleteAccount(@Body body: DeleteAccountRequest)
 
     @GET("users/search/") suspend fun searchUsers(@Query("q") query: String): List<UserSummary>
 

@@ -117,3 +117,23 @@ data class ActivityItem(
     @SerialName("entity_id") val entityId: Int? = null,
     @SerialName("created_at") val createdAt: String = "",
 )
+
+@Serializable
+data class Payment(
+    val id: Int,
+    val group: Int,
+    @SerialName("group_name") val groupName: String = "",
+    val payer: Int,
+    @SerialName("payer_username") val payerUsername: String = "",
+    val payee: Int,
+    @SerialName("payee_username") val payeeUsername: String = "",
+    @Serializable(with = MoneySerializer::class) val amount: String,
+    val status: String,
+    @SerialName("created_at") val createdAt: String = "",
+)
+
+@Serializable data class PaymentRequest(val group: Int, val payee: Int, val amount: String)
+@Serializable data class Membership(val id: Int, @SerialName("group_id") val groupId: Int)
+@Serializable data class ProfileUpdate(val name: String, val email: String)
+@Serializable data class ChangePasswordRequest(@SerialName("old_password") val oldPassword: String, @SerialName("new_password") val newPassword: String)
+@Serializable data class DeleteAccountRequest(val password: String)

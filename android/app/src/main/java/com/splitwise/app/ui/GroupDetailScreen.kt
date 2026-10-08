@@ -1,12 +1,15 @@
 package com.splitwise.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -31,9 +34,16 @@ import com.splitwise.app.data.UserSummary
 import java.math.BigDecimal
 
 @Composable
-fun GroupDetailScreen(vm: GroupDetailViewModel, groupId: Int, title: String, userId: Int?, onBack: () -> Unit, onAddExpense: () -> Unit) {
+fun GroupDetailScreen(
+    vm: GroupDetailViewModel, groupId: Int, title: String, userId: Int?, onBack: () -> Unit, onAddExpense: () -> Unit,
+    onSettle: (SettleTarget) -> Unit, onLeave: () -> Unit,
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var confirmLeave by rememberSaveable { mutableStateOf(false) }
+    var openExpenseId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var confirmDelete by remember { mutableStateOf<Expense?>(null) }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); vm.messageShown() } }
 
@@ -61,7 +71,16 @@ fun GroupDetailScreen(vm: GroupDetailViewModel, groupId: Int, title: String, use
     ) { padding ->
         Column(Modifier.padding(padding).systemBarsPadding().fillMaxSize()) {
             NavBar(title, onBack) {
-                androidx.compose.material3.IconButton(onClick = { vm.refresh() }) { Icon(Icons.Default.Refresh, "Refresh", tint = MaterialTheme.split.fg2) }
+                IconButton(onClick = { vm.refresh() }) { Icon(Icons.Default.Refresh, "Refresh", tint = MaterialTheme.split.fg2) }
+                Box {
+                    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "More", tint = MaterialTheme.split.fg2) }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Leave group", color = MaterialTheme.colorScheme.error) },
+                            onClick = { menuOpen = false; confirmLeave = true },
+                        )
+                    }
+                }
             }
             val members = (state.members as? Load.Ready)?.data.orEmpty()
             val expenses = (state.expenses as? Load.Ready)?.data.orEmpty()
@@ -75,10 +94,69 @@ fun GroupDetailScreen(vm: GroupDetailViewModel, groupId: Int, title: String, use
             }
             val names = members.associate { it.id to it }
             when (tab) {
-                0 -> LoadView(state.expenses, { vm.refresh() }) { ExpensesTab(it, names, userId) }
-                1 -> LoadView(state.settlements, { vm.refresh() }) { BalancesTab(it) }
+                0 -> LoadView(state.expenses, { vm.refresh() }) { ExpensesTab(it, names, userId) { e -> openExpenseId = e.id } }
+                1 -> LoadView(state.settlements, { vm.refresh() }) { BalancesTab(it, members, groupId, title, onSettle) }
                 else -> LoadView(state.members, { vm.refresh() }) { MembersTab(it, state.searchResults, vm::search, vm::invite) }
             }
+        }
+    }
+
+    if (confirmLeave) AlertDialog(
+        onDismissRequest = { confirmLeave = false },
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Leave \"$title\"?") },
+        text = {
+            val s = (state.settlements as? Load.Ready)?.data
+            val hasBalance = s != null && (s.youOwe.isNotEmpty() || s.owedToYou.isNotEmpty())
+            Text(if (hasBalance) "You still have an active balance. Settle up before leaving to avoid confusion." else "You'll stop seeing this group and its expenses.")
+        },
+        confirmButton = { TextButton(onClick = { confirmLeave = false; onLeave() }) { Text("Leave Group", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text("Cancel") } },
+    )
+    confirmDelete?.let { e ->
+        AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Delete \"${e.name}\"?") },
+            text = { Text("This removes the expense for everyone in the group and updates balances.") },
+            confirmButton = { TextButton(onClick = { confirmDelete = null; openExpenseId = null; vm.deleteExpense(e) }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } },
+        )
+    }
+    val openExpense = (state.expenses as? Load.Ready)?.data?.firstOrNull { it.id == openExpenseId }
+    if (openExpense != null) ExpenseSheet(
+        openExpense, (state.members as? Load.Ready)?.data.orEmpty(), userId,
+        onDismiss = { openExpenseId = null }, onDelete = { confirmDelete = openExpense },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExpenseSheet(e: Expense, members: List<Member>, userId: Int?, onDismiss: () -> Unit, onDelete: () -> Unit) {
+    val c = MaterialTheme.split
+    val byId = members.associateBy { it.id }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(e.name, style = MaterialTheme.typography.headlineSmall)
+            if (e.description.isNotBlank()) Text(e.description, color = c.fg2, style = MaterialTheme.typography.bodyMedium)
+            Text(formatRs(e.amount.toMoney(), forceDecimals = true), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
+            Text("${dayLabel(e.createdAt)} · paid by " + e.paidBy.joinToString { if (it == userId) "you" else byId[it]?.username ?: "User $it" }, color = c.fg2, style = MaterialTheme.typography.bodySmall)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            Text("SPLIT", color = c.fg3, style = MaterialTheme.typography.labelSmall)
+            e.splitOn.forEach { id ->
+                val m = byId[id]
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Avatar(initials(m?.name.orEmpty(), m?.username ?: "?"), id, 32.dp)
+                    Text((m?.username ?: "User $id") + if (id == userId) " (you)" else "", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Text(formatRs(shareOf(e, id), forceDecimals = true), style = MaterialTheme.typography.titleSmall)
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Box(
+                Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp))
+                    .border(1.5.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f), RoundedCornerShape(14.dp)).clickable(onClick = onDelete),
+                contentAlignment = Alignment.Center,
+            ) { Text("Delete expense", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleSmall) }
         }
     }
 }
@@ -118,7 +196,7 @@ private fun Stat(label: String, value: String, color: Color, modifier: Modifier)
 }
 
 @Composable
-private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId: Int?) {
+private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId: Int?, onOpen: (Expense) -> Unit) {
     if (expenses.isEmpty()) return EmptyState("No expenses yet. Tap + to add one.")
     val c = MaterialTheme.split
     val byDay = expenses.groupBy { dayLabel(it.createdAt) }
@@ -129,7 +207,7 @@ private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId
                 val payer = e.paidBy.joinToString { if (it == userId) "You" else names[it]?.username ?: "User $it" }
                 val net = if (userId != null) netFor(e, userId) else BigDecimal.ZERO
                 val involved = userId != null && hasSplitMember(e, userId)
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth().clickable { onOpen(e) }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(c.primaryBg), contentAlignment = Alignment.Center) {
                         Icon(Icons.Default.Receipt, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
                     }
@@ -152,12 +230,14 @@ private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId
 }
 
 @Composable
-private fun BalancesTab(s: Settlements) {
+private fun BalancesTab(s: Settlements, members: List<Member>, groupId: Int, groupName: String, onSettle: (SettleTarget) -> Unit) {
     val c = MaterialTheme.split
     if (s.youOwe.isEmpty() && s.owedToYou.isEmpty()) return EmptyState("You're all settled up.")
     LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         items(s.youOwe) { line ->
-            BalanceCard2("You owe ${line.toUser}", line.amount.toMoney(), c.oweBg, c.oweRing, c.owe)
+            val payee = members.firstOrNull { it.username == line.toUser }
+            BalanceCard2("You owe ${line.toUser}", line.amount.toMoney(), c.oweBg, c.oweRing, c.owe,
+                action = payee?.let { { SmallButton("Settle up", { onSettle(SettleTarget(groupId, groupName, it.id, it.username, line.amount)) }) } })
         }
         items(s.owedToYou) { line ->
             BalanceCard2("${line.fromUser} owes you", line.amount.toMoney(), c.owedBg, c.owedRing, c.owed)
@@ -166,14 +246,16 @@ private fun BalancesTab(s: Settlements) {
 }
 
 @Composable
-private fun BalanceCard2(text: String, amount: BigDecimal, bg: Color, ring: Color, fg: Color) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(bg)
-            .then(Modifier.padding(1.dp)).background(bg).padding(16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+private fun BalanceCard2(text: String, amount: BigDecimal, bg: Color, ring: Color, fg: Color, action: (@Composable () -> Unit)? = null) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(bg).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(text, color = fg, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
-        Text(formatRs(amount), color = fg, style = MaterialTheme.typography.titleLarge)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(text, color = fg, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
+            Text(formatRs(amount), color = fg, style = MaterialTheme.typography.titleLarge)
+        }
+        action?.invoke()
     }
 }
 

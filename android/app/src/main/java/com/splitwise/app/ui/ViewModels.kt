@@ -67,6 +67,7 @@ data class Overview(
     val invites: List<Invite>,
     val notifications: List<AppNotification>,
     val activity: List<ActivityItem>,
+    val payments: List<Payment> = emptyList(),
 ) {
     fun owe(): BigDecimal = balances.values.flatMap { it.youOwe }.fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
     fun owed(): BigDecimal = balances.values.flatMap { it.owedToYou }.fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
@@ -101,11 +102,13 @@ class OverviewViewModel(private val repo: Repository) : ViewModel() {
             val invites = async { repo.invites().getOrDefault(emptyList()) }
             val notifications = async { repo.notifications().getOrDefault(emptyList()) }
             val activity = async { repo.activity().getOrDefault(emptyList()) }
+            val payments = async { repo.payments().getOrDefault(emptyList()) }
             _state.value = Load.Ready(
                 Overview(
                     me = me.await(), groups = groups, balances = balances.await(),
                     members = members.associate { (id, d) -> id to d.await() },
                     invites = invites.await(), notifications = notifications.await(), activity = activity.await(),
+                    payments = payments.await(),
                 )
             )
         }
@@ -134,6 +137,32 @@ class OverviewViewModel(private val repo: Repository) : ViewModel() {
     }
 
     fun messageShown() { _message.value = null }
+
+    private fun <T> act(result: suspend () -> Result<T>, success: String? = null, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            result().fold(
+                { refresh(silent = true); success?.let { _message.value = it }; onDone() },
+                { _message.value = it.userMessage() },
+            )
+        }
+    }
+
+    fun pay(groupId: Int, payeeId: Int, amount: String, onDone: () -> Unit) =
+        act({ repo.createPayment(groupId, payeeId, amount) }, "Payment recorded. They'll confirm once received.", onDone)
+
+    fun confirmPayment(p: Payment) = act({ repo.confirmPayment(p.id) }, "Payment confirmed.")
+    fun cancelPayment(p: Payment) = act({ repo.cancelPayment(p.id) }, "Payment cancelled.")
+
+    fun leaveGroup(groupId: Int, onDone: () -> Unit) = act({ repo.leaveGroup(groupId) }, "You left the group.", onDone)
+
+    fun updateProfile(userId: Int, name: String, email: String, onDone: () -> Unit) =
+        act({ repo.updateProfile(userId, name, email) }, "Profile updated.", onDone)
+
+    fun changePassword(old: String, new: String, onDone: () -> Unit) =
+        act({ repo.changePassword(old, new) }, "Password changed.", onDone)
+
+    /** On success the session ends and the UI returns to the login screen. */
+    fun deleteAccount(password: String) = act({ repo.deleteAccount(password) })
 }
 
 class GroupDetailViewModel(private val repo: Repository, private val groupId: Int) : ViewModel() {
@@ -179,6 +208,15 @@ class GroupDetailViewModel(private val repo: Repository, private val groupId: In
         viewModelScope.launch {
             val msg = repo.invite(groupId, user.id).fold({ "Invite sent to ${user.username}." }, { it.userMessage() })
             _state.update { it.copy(message = msg, searchResults = emptyList()) }
+        }
+    }
+
+    fun deleteExpense(expense: Expense) {
+        viewModelScope.launch {
+            repo.deleteExpense(expense.id).fold(
+                { refresh(silent = true); _state.update { it.copy(message = "Expense deleted.") } },
+                { err -> _state.update { it.copy(message = err.userMessage()) } },
+            )
         }
     }
 

@@ -93,6 +93,26 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
         if (accept) api.acceptInvite(id) else api.declineInvite(id)
     }
 
+    suspend fun deleteExpense(id: Int) = call { api.deleteExpense(id) }
+
+    suspend fun leaveGroup(groupId: Int) = call {
+        val membership = api.memberships().results.firstOrNull { it.groupId == groupId }
+            ?: throw IllegalStateException("You are not a member of this group.")
+        api.leaveGroup(membership.id)
+    }
+
+    suspend fun payments() = call { api.payments().results }
+    suspend fun createPayment(groupId: Int, payeeId: Int, amount: String) = call { api.createPayment(PaymentRequest(groupId, payeeId, amount)) }
+    suspend fun confirmPayment(id: Int) = call { api.confirmPayment(id) }
+    suspend fun cancelPayment(id: Int) = call { api.cancelPayment(id) }
+
+    suspend fun updateProfile(id: Int, name: String, email: String) = call { api.updateProfile(id, ProfileUpdate(name.trim(), email.trim())) }
+    suspend fun changePassword(old: String, new: String) = call { api.changePassword(ChangePasswordRequest(old, new)) }
+    suspend fun deleteAccount(password: String) = call {
+        api.deleteAccount(DeleteAccountRequest(password))
+        tokens.clear()
+    }
+
     suspend fun profile() = call { api.profile().results.first() }
     suspend fun activity() = call { api.activity().results }
 

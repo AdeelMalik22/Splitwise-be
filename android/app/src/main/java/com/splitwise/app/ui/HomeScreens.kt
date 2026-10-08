@@ -1,6 +1,7 @@
 package com.splitwise.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -207,6 +208,13 @@ fun GroupsScreen(overview: Overview, onOpenGroup: (Group) -> Unit, onNew: () -> 
         else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(shown, key = { it.id }) { g ->
                 SplitCard { GroupRow(g, overview, onClick = { onOpenGroup(g) }) }
+            }
+            item {
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onNew)
+                        .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(16.dp)).padding(18.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text("+  Create a new group", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall) }
             }
             item { Spacer(Modifier.height(16.dp)) }
         }
