@@ -82,6 +82,7 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
         api.expenses().filter { it.groupId == groupId }.sortedByDescending { it.createdAt }
     }
 
+    suspend fun allExpenses() = call { api.expenses() }
     suspend fun createExpense(request: ExpenseRequest) = call { api.createExpense(request) }
     suspend fun expense(id: Int) = call { api.expense(id) }
     suspend fun updateExpense(id: Int, request: ExpenseRequest) = call { api.updateExpense(id, request) }

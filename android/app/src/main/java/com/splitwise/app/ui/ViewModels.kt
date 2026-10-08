@@ -79,7 +79,10 @@ data class Overview(
     val notifications: List<AppNotification>,
     val activity: List<ActivityItem>,
     val payments: List<Payment> = emptyList(),
+    val expenses: List<Expense> = emptyList(),
 ) {
+    fun spending(month: String? = null): Spending = spendingFor(expenses, me?.id ?: -1, month)
+
     fun owe(): BigDecimal = balances.values.flatMap { it.youOwe }.fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
     fun owed(): BigDecimal = balances.values.flatMap { it.owedToYou }.fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
     fun net(groupId: Int): BigDecimal {
@@ -152,12 +155,13 @@ class OverviewViewModel(private val repo: Repository) : ViewModel() {
             val notifications = async { repo.notifications().getOrDefault(emptyList()) }
             val activity = async { repo.activity().getOrDefault(emptyList()) }
             val payments = async { repo.payments().getOrDefault(emptyList()) }
+            val expenses = async { repo.allExpenses().getOrDefault(emptyList()) }
             _state.value = Load.Ready(
                 Overview(
                     me = me.await(), groups = groups, balances = balances.await(),
                     members = members.associate { (id, d) -> id to d.await() },
                     invites = invites.await(), notifications = notifications.await(), activity = activity.await(),
-                    payments = payments.await(),
+                    payments = payments.await(), expenses = expenses.await(),
                 )
             )
         }

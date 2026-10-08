@@ -49,3 +49,28 @@ class MoneyTest {
         assertEquals(3, passwordStrength("Abcdefg1!xyz"))
     }
 }
+
+class SpendingTest {
+    private fun e(id: Int, amount: String, paidBy: List<Int>, splitOn: List<Int>, created: String) = com.splitwise.app.data.Expense(
+        id = id, name = "x", amount = amount, paidBy = paidBy, splitOn = splitOn, groupId = 1, createdAt = created,
+    )
+
+    @Test fun soloExpenseCountsAsBothPaidAndShare() {
+        val s = spendingFor(listOf(e(1, "500.00", listOf(1), listOf(1), "2026-10-03T10:00:00Z")), userId = 1)
+        org.junit.Assert.assertEquals(BigDecimal("500.00"), s.paid)
+        org.junit.Assert.assertEquals(BigDecimal("500.00"), s.share)
+    }
+
+    @Test fun sharedExpenseSplitsShareButNotPaid() {
+        val list = listOf(e(1, "100.00", listOf(1), listOf(1, 2), "2026-10-03T10:00:00Z"), e(2, "60.00", listOf(2), listOf(1, 2), "2026-10-04T10:00:00Z"))
+        val s = spendingFor(list, userId = 1)
+        org.junit.Assert.assertEquals(BigDecimal("100.00"), s.paid)
+        org.junit.Assert.assertEquals(BigDecimal("80.00"), s.share)
+    }
+
+    @Test fun monthFilterSeparatesMonths() {
+        val list = listOf(e(1, "100.00", listOf(1), listOf(1), "2026-09-15T12:00:00Z"), e(2, "40.00", listOf(1), listOf(1), "2026-10-15T12:00:00Z"))
+        org.junit.Assert.assertEquals(BigDecimal("40.00"), spendingFor(list, 1, "2026-10").paid)
+        org.junit.Assert.assertEquals(BigDecimal("140.00"), spendingFor(list, 1).paid)
+    }
+}

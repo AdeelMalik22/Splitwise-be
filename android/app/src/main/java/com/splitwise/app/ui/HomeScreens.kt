@@ -46,6 +46,7 @@ fun HomeScreen(overview: Overview, userId: Int?, onOpenGroup: (Group) -> Unit, o
         item { BalanceCard(overview, onSettleUp) }
         overview.awaitingMyConfirmation().take(2).forEach { p -> item(key = "confirm${p.id}") { ConfirmBanner(p, onConfirmPayment, onSettleUp) } }
         if (pending.isNotEmpty()) item { InviteBanner(pending.first(), pending.size, onRespond, onOpenInvites) }
+        item { SpendingCard(overview) }
         item { SectionHeader("Your Groups", link = "See all", onLink = onOpenGroups) }
         item {
             SplitCard(Modifier.padding(horizontal = 16.dp)) {
@@ -103,6 +104,34 @@ private fun BalanceCard(o: Overview, onSettleUp: () -> Unit) {
                 contentAlignment = Alignment.Center,
             ) { Text(if (owe.signum() > 0) "Settle up" else "Payments", color = Color.White, style = MaterialTheme.typography.titleSmall) }
         }
+    }
+}
+
+@Composable
+private fun SpendingCard(o: Overview) {
+    val c = MaterialTheme.split
+    val month = o.spending(currentMonthKey())
+    val all = o.spending()
+    Column(Modifier.padding(16.dp, 16.dp, 16.dp, 0.dp)) {
+        Text("YOUR SPENDING", style = MaterialTheme.typography.titleSmall.copy(letterSpacing = 0.8.sp), color = c.fg2, modifier = Modifier.padding(bottom = 10.dp))
+        SplitCard(Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(16.dp)) {
+                SpendColumn("This month", month, Modifier.weight(1f))
+                Box(Modifier.width(1.dp).height(56.dp).background(MaterialTheme.colorScheme.outline))
+                SpendColumn("All time", all, Modifier.weight(1f).padding(start = 16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpendColumn(label: String, s: Spending, modifier: Modifier) {
+    val c = MaterialTheme.split
+    Column(modifier) {
+        Text(label, color = c.fg3, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium))
+        Text(formatRs(s.share), Modifier.padding(top = 2.dp), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
+        Text("your share", color = c.fg2, style = MaterialTheme.typography.bodySmall)
+        Text("You paid ${formatRs(s.paid)}", Modifier.padding(top = 4.dp), color = c.fg2, style = MaterialTheme.typography.bodySmall)
     }
 }
 

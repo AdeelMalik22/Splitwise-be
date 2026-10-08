@@ -62,3 +62,23 @@ private val dayFormat = java.time.format.DateTimeFormatter.ofPattern("MMM d, yyy
 fun dayLabel(iso: String): String = runCatching {
     java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault()).format(dayFormat)
 }.getOrDefault(iso.take(10))
+
+/** "2026-10" for an ISO timestamp in the device's time zone; used to group spending by month. */
+fun monthKey(iso: String): String = runCatching {
+    java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault()).let { "%04d-%02d".format(it.year, it.monthValue) }
+}.getOrDefault(iso.take(7))
+
+fun currentMonthKey(): String = java.time.LocalDate.now().let { "%04d-%02d".format(it.year, it.monthValue) }
+
+/** What [userId] personally spent and consumed. */
+data class Spending(val paid: BigDecimal, val share: BigDecimal)
+
+fun spendingFor(expenses: List<Expense>, userId: Int, month: String? = null): Spending {
+    var paid = BigDecimal.ZERO
+    var share = BigDecimal.ZERO
+    expenses.filter { month == null || monthKey(it.createdAt) == month }.forEach { e ->
+        if (userId in e.paidBy) paid += e.amount.toMoney().divide(BigDecimal(e.paidBy.size), 2, RoundingMode.HALF_UP)
+        share += shareOf(e, userId)
+    }
+    return Spending(paid, share)
+}
