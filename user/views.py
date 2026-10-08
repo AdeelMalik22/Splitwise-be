@@ -12,6 +12,7 @@ from core.activity import log_activity
 from core.models import UserGroup, Group
 from user.models import User, GroupInvite
 from user.invite_serializers import UserSearchSerializer, GroupInviteSerializer
+from core.images import clean_image
 from user.emails import mask_email, read_reset_token, read_verify_token, send_invite_email, send_reset_email, send_verification_email
 from user.pages import app_link, page
 from user.throttles import EmailRateThrottle, InviteRateThrottle
@@ -40,7 +41,7 @@ class UserVietSet(viewsets.ModelViewSet):
         if len(query) < 2:
             return Response({'detail': 'q must contain at least 2 characters.'}, status=400)
         users = User.objects.exclude(pk=request.user.pk).filter(username__icontains=query)[:20]
-        return Response(UserSearchSerializer(users, many=True).data)
+        return Response(UserSearchSerializer(users, many=True, context={'request': request}).data)
 
     def create(self, request, *args, **kwargs):
         return Response(
@@ -120,6 +121,19 @@ class UserVietSet(viewsets.ModelViewSet):
                 '<button class="btn" type="submit">Set new password</button></form>')
         return page('Choose a new password', f'For {user.username}. At least 8 characters.', body_html=form,
                     status=400 if error else 200)
+
+    @action(detail=False, methods=['post', 'delete'], url_path='avatar')
+    def avatar(self, request):
+        """Set (POST multipart `image`) or remove (DELETE) the signed-in user's profile picture."""
+        user = request.user
+        if user.avatar:
+            user.avatar.delete(save=False)
+        if request.method == 'POST':
+            user.avatar = clean_image(request.FILES.get('image'))
+        else:
+            user.avatar = None
+        user.save(update_fields=('avatar',))
+        return Response(self.get_serializer(user).data)
 
     @action(detail=False, methods=['post'], url_path='change_password')
     def change_password(self, request):

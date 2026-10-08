@@ -5,9 +5,11 @@ from user.models import GroupInvite, User
 
 
 class UserSearchSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(read_only=True)
+
     class Meta:
         model = User
-        fields = ('id', 'username', 'name', 'email')
+        fields = ('id', 'username', 'name', 'email', 'avatar')
 
 
 class GroupInviteSerializer(serializers.ModelSerializer):

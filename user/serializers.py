@@ -29,10 +29,11 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
+    avatar = serializers.ImageField(read_only=True)  # changed only through /users/avatar/
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'name', 'email', 'password', 'email_verified')
+        fields = ('id', 'username', 'name', 'email', 'password', 'email_verified', 'avatar')
         read_only_fields = ('email_verified',)
 
     def create(self, validated_data):

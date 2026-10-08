@@ -73,3 +73,10 @@ export PUBLIC_BASE_URL='http://<server-ip>:8000'                 # used for link
 Restart gunicorn afterwards. If email is misconfigured the API still works; the app offers a
 "Resend email" button, and `python manage.py shell -c "from user.models import User; User.objects.filter(username='x').update(email_verified=True)"`
 can unblock an account manually. Accounts that existed before this feature are treated as verified.
+
+
+## Pictures (profile and group images)
+
+Uploaded pictures are re-encoded to small JPEGs and stored in the `media/` folder next to `manage.py`
+(served by Django at `/media/`). Include that folder in your backups, and make sure the user running gunicorn can
+write to it. Pillow is required: `pip install -r requirement.txt` on the server.

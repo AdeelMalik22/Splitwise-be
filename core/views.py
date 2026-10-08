@@ -10,6 +10,7 @@ from core.models import Group, UserGroup, Expense, ExpenseParticipant, Payment, 
 from core.payment_serializers import PaymentSerializer
 from core.notification_serializers import NotificationSerializer
 from core.activity import log_activity
+from core.images import clean_image
 from core.activity_serializers import ActivitySerializer
 from django.utils import timezone
 from core.serializers import GroupSerializer, UserGroupSerializer, ExpenseSerializer
@@ -65,6 +66,17 @@ class GroupViewSet(viewsets.ModelViewSet):
         self.perform_destroy(group)
         return Response({"detail": "Group and its associate records have been deleted."}, status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=True, methods=['post', 'delete'], url_path='image')
+    def image(self, request, pk=None):
+        """Any member can set (POST multipart `image`) or remove (DELETE) the group's picture."""
+        group = self.get_object()
+        if group.image:
+            group.image.delete(save=False)
+        group.image = clean_image(request.FILES.get('image')) if request.method == 'POST' else None
+        group.save(update_fields=('image', 'updated'))
+        log_activity(request.user, 'updated', 'group', group.pk, group=group)
+        return Response(self.get_serializer(group).data)
+
     @action(detail=True, methods=['delete'], url_path=r'members/(?P<user_id>\d+)')
     def remove_member(self, request, pk=None, user_id=None):
         group = self.get_object()
@@ -109,7 +121,11 @@ class UserGroupViewSet(viewsets.ModelViewSet):
             return Response({"detail": "No users found for this group."}, status=status.HTTP_404_NOT_FOUND)
 
         user_ids = [ug['user_id'] for ug in user_groups]
-        users = User.objects.filter(id__in=user_ids).values('id', 'username', 'name')
+        users = [
+            {'id': u.id, 'username': u.username, 'name': u.name,
+             'avatar': request.build_absolute_uri(u.avatar.url) if u.avatar else None}
+            for u in User.objects.filter(id__in=user_ids).order_by('id')
+        ]
 
         return Response(users, status=status.HTTP_200_OK)
 

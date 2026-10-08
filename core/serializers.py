@@ -7,9 +7,11 @@ from core.models import Group, UserGroup, Expense, ExpenseParticipant
 
 
 class GroupSerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(read_only=True)  # changed only through /groups/<id>/image/
+
     class Meta:
         model = Group
-        fields = ('id', 'name', 'description', 'icon', 'created_by', 'created', 'updated')
+        fields = ('id', 'name', 'description', 'icon', 'image', 'created_by', 'created', 'updated')
         read_only_fields = ('id', 'created_by', 'created', 'updated')
 
 class UserGroupSerializer(serializers.ModelSerializer):

@@ -6,6 +6,8 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
 
+from core.images import RandomName
+
 # Create your models here.
 
 
@@ -15,6 +17,7 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=255)
     email_verified = models.BooleanField(default=False)
+    avatar = models.ImageField(upload_to=RandomName('avatars'), null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if self.is_superuser:

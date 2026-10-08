@@ -1,5 +1,6 @@
 from django.db import models
 
+from core.images import RandomName
 from user.models import User
 
 
@@ -11,6 +12,7 @@ class Group(models.Model):
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=255, blank=True, default='')
     icon = models.CharField(max_length=16, blank=True, default='')
+    image = models.ImageField(upload_to=RandomName('groups'), null=True, blank=True)
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_groups')
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
