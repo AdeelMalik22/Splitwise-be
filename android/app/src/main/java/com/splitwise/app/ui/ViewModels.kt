@@ -128,12 +128,15 @@ class SessionViewModel(private val repo: Repository) : ViewModel() {
 
     init {
         viewModelScope.launch { repo.loggedIn.collect { signedIn -> if (!signedIn) _epoch.update { it + 1 } } }
+        viewModelScope.launch { repo.currency.collect { activeCurrency = currencyByCode(it) } }
     }
 
     val loggedIn = repo.loggedIn
     val userId = repo.userId
     val darkMode = repo.darkMode
     val alertsOn = repo.alertsOn
+    val currency = repo.currency
+    fun setCurrency(code: String) { viewModelScope.launch { repo.setCurrency(code) } }
     val pendingInvite = repo.pendingInvite
     val biometric = repo.biometric
     val biometricOffered = repo.biometricOffered

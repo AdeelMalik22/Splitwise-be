@@ -190,6 +190,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pend
                 TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) {
                     AccountScreen(
                         it, isDark, session::setDarkMode, alertsOn, session::setAlertsOn, session::logout,
+                        currency = activeCurrency, onCurrencyChange = { c -> session.setCurrency(c.code) },
                         fingerprint = Biometric.state(androidx.compose.ui.platform.LocalContext.current),
                         fingerprintOn = enrolled != null,
                         onFingerprintChange = { on -> if (on) enrollFingerprint() else session.disableBiometric() },

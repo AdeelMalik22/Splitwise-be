@@ -1,5 +1,7 @@
 package com.splitwise.app.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import com.splitwise.app.data.Expense
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -9,11 +11,30 @@ import java.util.Locale
 
 private val symbols = DecimalFormatSymbols(Locale.US)
 
+/** A display currency. Amounts are never converted: this only changes the symbol shown next to them. */
+data class Currency(val code: String, val symbol: String, val name: String) {
+    /** "Rs 4,800" for lettered symbols, "$4,800" for glyphs. */
+    val prefix: String get() = if (symbol.all { it.isLetter() }) "$symbol " else symbol
+}
+
+val Currencies = listOf(
+    Currency("PKR", "Rs", "Pakistani Rupee"), Currency("USD", "$", "US Dollar"), Currency("EUR", "€", "Euro"),
+    Currency("GBP", "£", "British Pound"), Currency("INR", "₹", "Indian Rupee"), Currency("AED", "AED", "UAE Dirham"),
+    Currency("SAR", "SAR", "Saudi Riyal"), Currency("QAR", "QAR", "Qatari Riyal"), Currency("CAD", "C$", "Canadian Dollar"),
+    Currency("AUD", "A$", "Australian Dollar"), Currency("BDT", "৳", "Bangladeshi Taka"), Currency("TRY", "₺", "Turkish Lira"),
+    Currency("MYR", "RM", "Malaysian Ringgit"), Currency("JPY", "¥", "Japanese Yen"),
+)
+
+fun currencyByCode(code: String?) = Currencies.firstOrNull { it.code == code } ?: Currencies.first()
+
+/** The currency chosen in Account. Compose state, so every amount that reads it redraws when it changes. */
+var activeCurrency: Currency by androidx.compose.runtime.mutableStateOf(Currencies.first())
+
 /** "Rs 4,800" (whole amounts) or "Rs 4,800.50"; [forceDecimals] always shows two decimals. */
 fun formatRs(amount: BigDecimal, forceDecimals: Boolean = false): String {
     val scaled = amount.setScale(2, RoundingMode.HALF_UP)
     val whole = !forceDecimals && scaled.stripTrailingZeros().scale() <= 0
-    return "Rs " + DecimalFormat(if (whole) "#,##0" else "#,##0.00", symbols).format(scaled)
+    return activeCurrency.prefix + DecimalFormat(if (whole) "#,##0" else "#,##0.00", symbols).format(scaled)
 }
 
 fun String.toMoney(): BigDecimal = toBigDecimalOrNull() ?: BigDecimal.ZERO

@@ -54,6 +54,8 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     val userId: Flow<Int?> = tokens.userId
     val darkMode: Flow<Boolean?> = tokens.darkMode
     val alertsOn: Flow<Boolean> = tokens.alertsOn
+    val currency: Flow<String> = tokens.currency
+    suspend fun setCurrency(code: String) = tokens.setCurrency(code)
     suspend fun setAlertsOn(on: Boolean) = tokens.setAlertsOn(on)
     suspend fun setDarkMode(dark: Boolean) = tokens.setDarkMode(dark)
 

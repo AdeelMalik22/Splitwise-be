@@ -67,7 +67,7 @@ fun SettleUpScreen(
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Rs", color = c.fg2, style = MaterialTheme.typography.titleLarge)
+                            Text(activeCurrency.symbol, color = c.fg2, style = MaterialTheme.typography.titleLarge)
                             Spacer(Modifier.width(6.dp))
                             androidx.compose.foundation.text.BasicTextField(
                                 amountText, { v -> if (v.matches(Regex("""\d{0,9}([.]\d{0,2})?"""))) amountText = v }, singleLine = true,

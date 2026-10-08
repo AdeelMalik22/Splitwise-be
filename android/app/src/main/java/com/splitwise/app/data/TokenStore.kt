@@ -32,6 +32,11 @@ class TokenStore(private val context: Context) {
     val alertsOn: Flow<Boolean> = context.dataStore.data.map { it[alertsKey] ?: true }
     suspend fun setAlertsOn(on: Boolean) { context.dataStore.edit { it[alertsKey] = on } }
 
+    private val currencyKey = stringPreferencesKey("currency")
+    /** ISO code of the display currency; a device setting like dark mode. */
+    val currency: Flow<String> = context.dataStore.data.map { it[currencyKey] ?: "PKR" }
+    suspend fun setCurrency(code: String) { context.dataStore.edit { it[currencyKey] = code } }
+
     private val bioBlobKey = stringPreferencesKey("bio_blob")
     private val bioIvKey = stringPreferencesKey("bio_iv")
     private val bioUserKey = stringPreferencesKey("bio_user")

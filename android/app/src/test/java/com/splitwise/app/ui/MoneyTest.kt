@@ -74,3 +74,25 @@ class SpendingTest {
         org.junit.Assert.assertEquals(BigDecimal("140.00"), spendingFor(list, 1).paid)
     }
 }
+
+class CurrencyTest {
+    @org.junit.After fun reset() { activeCurrency = Currencies.first() }
+
+    @Test fun lettersGetASpaceAndGlyphsDoNot() {
+        activeCurrency = currencyByCode("PKR")
+        org.junit.Assert.assertEquals("Rs 1,200", formatRs(BigDecimal("1200")))
+        activeCurrency = currencyByCode("USD")
+        org.junit.Assert.assertEquals("$1,200.50", formatRs(BigDecimal("1200.5")))
+        activeCurrency = currencyByCode("AED")
+        org.junit.Assert.assertEquals("AED 90", formatRs(BigDecimal("90")))
+    }
+
+    @Test fun unknownCodesFallBackToTheDefault() {
+        org.junit.Assert.assertEquals("PKR", currencyByCode("???").code)
+        org.junit.Assert.assertEquals("PKR", currencyByCode(null).code)
+    }
+
+    @Test fun everyCurrencyHasAUniqueCode() {
+        org.junit.Assert.assertEquals(Currencies.size, Currencies.map { it.code }.toSet().size)
+    }
+}

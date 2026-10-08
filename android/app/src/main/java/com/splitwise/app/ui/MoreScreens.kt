@@ -90,7 +90,7 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
             Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Total amount", color = c.fg2, style = MaterialTheme.typography.labelMedium)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Rs", color = c.fg2, style = MaterialTheme.typography.titleLarge)
+                    Text(activeCurrency.symbol, color = c.fg2, style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.width(6.dp))
                     BasicAmountField(amount) { amount = it }
                 }
@@ -160,7 +160,7 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
                                     values[m.id].orEmpty(), { v -> if (v.matches(Regex("""\d{0,9}([.]\d{0,2})?"""))) values[m.id] = v },
                                     singleLine = true, modifier = Modifier.width(110.dp), shape = RoundedCornerShape(10.dp),
                                     suffix = { if (splitMode == SplitMode.Percent) Text("%") },
-                                    prefix = { if (splitMode == SplitMode.Exact) Text("Rs ") },
+                                    prefix = { if (splitMode == SplitMode.Exact) Text(activeCurrency.prefix) },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     textStyle = MaterialTheme.typography.bodyMedium,
                                 )
@@ -376,11 +376,13 @@ fun AccountScreen(
     overview: Overview, dark: Boolean, onDarkChange: (Boolean) -> Unit, alertsOn: Boolean, onAlertsChange: (Boolean) -> Unit, onLogout: () -> Unit,
     onEditProfile: () -> Unit, onChangePassword: () -> Unit, onPayments: () -> Unit, onDeleteAccount: (String) -> Unit,
     fingerprint: BiometricState = BiometricState.Unavailable, fingerprintOn: Boolean = false, onFingerprintChange: (Boolean) -> Unit = {},
+    currency: Currency = activeCurrency, onCurrencyChange: (Currency) -> Unit = {},
 ) {
     val me = overview.me
     val c = MaterialTheme.split
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var pickCurrency by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         NavBar("Account", onBack = null)
         if (me != null) SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
@@ -425,11 +427,12 @@ fun AccountScreen(
                 Switch(alertsOn, onAlertsChange, colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary))
             }
             Divider16()
-            Row(Modifier.padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.clickable { pickCurrency = true }.padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Currency", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
-                    Text("Amounts displayed in PKR (Rs)", color = c.fg2, style = MaterialTheme.typography.bodySmall)
+                    Text("${currency.name} (${currency.symbol})", color = c.fg2, style = MaterialTheme.typography.bodySmall)
                 }
+                Icon(Icons.Default.ArrowDropDown, null, tint = c.fg3)
             }
         }
         SectionHeader("Account")
@@ -448,6 +451,23 @@ fun AccountScreen(
         }
         Spacer(Modifier.height(24.dp))
     }
+    if (pickCurrency) AlertDialog(
+        onDismissRequest = { pickCurrency = false },
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Currency") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("Only the symbol changes; amounts are not converted.", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 8.dp))
+                Currencies.forEach { cur ->
+                    Row(Modifier.fillMaxWidth().clickable { pickCurrency = false; onCurrencyChange(cur) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = cur.code == currency.code, onClick = { pickCurrency = false; onCurrencyChange(cur) })
+                        Column { Text("${cur.name}", style = MaterialTheme.typography.bodyLarge); Text("${cur.code} · ${cur.symbol}", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall) }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { pickCurrency = false }) { Text("Close") } },
+    )
     if (confirmDelete) DeleteAccountDialog(onDismiss = { confirmDelete = false }, onConfirm = { confirmDelete = false; onDeleteAccount(it) })
     if (confirmLogout) AlertDialog(
         onDismissRequest = { confirmLogout = false },
