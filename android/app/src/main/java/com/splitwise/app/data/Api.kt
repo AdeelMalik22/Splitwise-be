@@ -13,6 +13,7 @@ interface AuthApi {
     @POST("login/") suspend fun login(@Body body: LoginRequest): TokenPair
     @POST("login/refresh/") suspend fun refresh(@Body body: RefreshRequest): AccessToken
     @POST("users/register/") suspend fun register(@Body body: RegisterRequest): RegisterResponse
+    @GET("invites/lookup/") suspend fun lookupInvite(@Query("token") token: String): InviteLookup
     @POST("users/forgot_password/") suspend fun forgotPassword(@Body body: IdentifierRequest)
     @POST("users/resend_verification/") suspend fun resendVerification(@Body body: IdentifierRequest)
 }
@@ -51,6 +52,7 @@ interface SplitwiseApi {
 
     @GET("invites/") suspend fun invites(): Page<Invite>
     @POST("invites/") suspend fun invite(@Body body: InviteRequest): Invite
+    @POST("invites/accept_token/") suspend fun acceptInviteToken(@Body body: TokenRequest): JoinResult
     @POST("invites/{id}/accept/") suspend fun acceptInvite(@Path("id") id: Int): Invite
     @POST("invites/{id}/decline/") suspend fun declineInvite(@Path("id") id: Int): Invite
 

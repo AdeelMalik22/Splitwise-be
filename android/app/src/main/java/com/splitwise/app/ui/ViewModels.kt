@@ -33,6 +33,7 @@ class AuthViewModel(private val repo: Repository) : ViewModel() {
         val notice: String? = null,
         val emailSent: Boolean = true,
         val resetSent: Boolean = false,
+        val invitePreview: InviteLookup? = null,
     )
 
     private val _state = MutableStateFlow(State())
@@ -41,12 +42,13 @@ class AuthViewModel(private val repo: Repository) : ViewModel() {
     fun login(username: String, password: String) {
         if (username.isBlank() || password.isEmpty()) return fail("Enter your username and password.")
         if (_state.value.busy) return
-        _state.value = State(busy = true)
+        _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             // On success the session flow flips and the UI leaves the auth screen.
+            val preview = _state.value.invitePreview
             _state.value = repo.login(username, password).fold(
                 { State() },
-                { e -> if (e is EmailNotVerifiedException) State(error = e.message, unverifiedLogin = username.trim()) else State(error = e.userMessage()) },
+                { e -> if (e is EmailNotVerifiedException) State(error = e.message, unverifiedLogin = username.trim(), invitePreview = preview) else State(error = e.userMessage(), invitePreview = preview) },
             )
         }
     }
@@ -55,11 +57,12 @@ class AuthViewModel(private val repo: Repository) : ViewModel() {
         if (username.isBlank() || email.isBlank()) return fail("Username and email are required.")
         if (password.length < 8) return fail("Password must be at least 8 characters.")
         if (_state.value.busy) return
-        _state.value = State(busy = true)
+        val preview = _state.value.invitePreview
+        _state.value = State(busy = true, invitePreview = preview)
         viewModelScope.launch {
             _state.value = repo.register(username, name, email, password).fold(
-                { State(verifyEmail = email.trim(), emailSent = it.emailSent) },
-                { State(error = it.userMessage()) },
+                { State(verifyEmail = email.trim(), emailSent = it.emailSent, invitePreview = preview) },
+                { State(error = it.userMessage(), invitePreview = preview) },
             )
         }
     }
@@ -85,7 +88,18 @@ class AuthViewModel(private val repo: Repository) : ViewModel() {
         }
     }
 
-    fun backToLogin() { _state.value = State() }
+    /** Shows who invited the person on the login/register screens (public lookup, no account needed). */
+    fun loadInvitePreview(token: String?) {
+        if (token == null) return _state.update { it.copy(invitePreview = null) }
+        viewModelScope.launch {
+            repo.lookupInvite(token).fold(
+                { p -> _state.update { it.copy(invitePreview = p) } },
+                { _state.update { it.copy(invitePreview = null) } },
+            )
+        }
+    }
+
+    fun backToLogin() { _state.update { State(invitePreview = it.invitePreview) } }
     fun clearError() = _state.update { it.copy(error = null, notice = null, unverifiedLogin = null) }
     private fun fail(msg: String) = _state.update { it.copy(error = msg) }
 }
@@ -104,6 +118,8 @@ class SessionViewModel(private val repo: Repository) : ViewModel() {
     val userId = repo.userId
     val darkMode = repo.darkMode
     val alertsOn = repo.alertsOn
+    val pendingInvite = repo.pendingInvite
+    fun setPendingInvite(token: String?) { viewModelScope.launch { repo.setPendingInvite(token) } }
     fun setAlertsOn(on: Boolean) { viewModelScope.launch { repo.setAlertsOn(on) } }
     fun setDarkMode(dark: Boolean) { viewModelScope.launch { repo.setDarkMode(dark) } }
     fun logout() { viewModelScope.launch { repo.logout() } }
@@ -435,5 +451,42 @@ class InviteSearchViewModel(private val repo: Repository) : ViewModel() {
         }
     }
 
+    fun inviteByEmail(groupId: Int, email: String, onSent: () -> Unit) {
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+            return _state.update { it.copy(message = "Enter a valid email address.") }
+        }
+        viewModelScope.launch {
+            repo.inviteByEmail(groupId, email).fold(
+                { _state.update { it.copy(message = "Invitation emailed to ${email.trim()}.") }; onSent() },
+                { err -> _state.update { it.copy(message = err.userMessage()) } },
+            )
+        }
+    }
+
     fun messageShown() = _state.update { it.copy(message = null) }
+}
+
+class JoinViewModel(private val repo: Repository, private val token: String) : ViewModel() {
+    data class State(val info: Load<InviteLookup> = Load.Loading, val joining: Boolean = false, val error: String? = null, val joined: JoinResult? = null)
+
+    private val _state = MutableStateFlow(State())
+    val state: StateFlow<State> = _state.asStateFlow()
+
+    init { load() }
+
+    fun load() {
+        _state.update { it.copy(info = Load.Loading) }
+        viewModelScope.launch { _state.update { it.copy(info = repo.lookupInvite(token).toLoad()) } }
+    }
+
+    fun join() {
+        if (_state.value.joining) return
+        _state.update { it.copy(joining = true, error = null) }
+        viewModelScope.launch {
+            repo.joinWithInvite(token).fold(
+                { r -> _state.update { it.copy(joining = false, joined = r) } },
+                { e -> _state.update { it.copy(joining = false, error = e.userMessage()) } },
+            )
+        }
+    }
 }

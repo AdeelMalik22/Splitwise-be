@@ -225,6 +225,7 @@ fun InvitesScreen(overview: Overview, userId: Int?, search: InviteSearchViewMode
     LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); search.messageShown() } }
     var query by rememberSaveable { mutableStateOf("") }
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var showEmailInvite by rememberSaveable { mutableStateOf(false) }
     var groupId by rememberSaveable { mutableStateOf(overview.groups.firstOrNull()?.id) }
     val received = overview.invites.filter { it.invitee == userId }
     val sent = overview.invites.filter { it.inviter == userId }
@@ -269,15 +270,44 @@ fun InvitesScreen(overview: Overview, userId: Int?, search: InviteSearchViewMode
             items(list, key = { "i${it.id}" }) { invite -> InviteCard(invite, received = tab == 0, onRespond = onRespond) }
         }
     }
+    if (showEmailInvite) EmailInviteDialog(
+        groups = overview.groups, initialGroupId = groupId,
+        onDismiss = { showEmailInvite = false },
+        onSend = { gid, email -> search.inviteByEmail(gid, email) { showEmailInvite = false; onSent() } },
+    )
+}
+
+@Composable
+private fun EmailInviteDialog(groups: List<Group>, initialGroupId: Int?, onDismiss: () -> Unit, onSend: (Int, String) -> Unit) {
+    var email by rememberSaveable { mutableStateOf("") }
+    var gid by rememberSaveable { mutableStateOf(initialGroupId ?: groups.first().id) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Invite by email") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("They get an email with a link. If they don't have SplitEase yet, they'll create an account with that address and join automatically.", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(email, { email = it }, label = { Text("Friend's email") }, singleLine = true, shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+                Text("Group", style = MaterialTheme.typography.titleSmall)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    groups.forEach { g -> SelectChip("${g.emoji()}  ${g.name}", g.id == gid) { gid = g.id } }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSend(gid, email) }, enabled = email.isNotBlank()) { Text("Send invite") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
 private fun InviteCard(invite: Invite, received: Boolean, onRespond: (Invite, Boolean) -> Unit) {
-    val who = if (received) invite.inviterName.ifBlank { invite.inviterUsername } else invite.inviteeUsername
+    val who = if (received) invite.inviterName.ifBlank { invite.inviterUsername } else invite.inviteeUsername.ifBlank { invite.email }
     SplitCard(Modifier.padding(16.dp, 12.dp, 16.dp, 0.dp).fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Avatar(initials("", who), if (received) invite.inviter else invite.invitee, 40.dp)
+                Avatar(initials("", who), (if (received) invite.inviter else invite.invitee) ?: 0, 40.dp)
                 Column(Modifier.weight(1f)) {
                     Text(if (received) "$who invited you to join ${invite.groupName}" else "You invited $who to ${invite.groupName}", style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp))
                 }

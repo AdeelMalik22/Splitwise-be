@@ -30,6 +30,13 @@ class TokenStore(private val context: Context) {
     val alertsOn: Flow<Boolean> = context.dataStore.data.map { it[alertsKey] ?: true }
     suspend fun setAlertsOn(on: Boolean) { context.dataStore.edit { it[alertsKey] = on } }
 
+    private val inviteKey = stringPreferencesKey("pending_invite")
+    /** An invitation link opened before sign-in; kept until it is used or dismissed, even across email verification. */
+    val pendingInvite: Flow<String?> = context.dataStore.data.map { it[inviteKey] }
+    suspend fun setPendingInvite(token: String?) {
+        context.dataStore.edit { if (token == null) it.remove(inviteKey) else it[inviteKey] = token }
+    }
+
     private val darkKey = booleanPreferencesKey("dark_mode")
     /** null = follow the system theme. Survives sign-out (it's a device setting). */
     val darkMode: Flow<Boolean?> = context.dataStore.data.map { it[darkKey] }

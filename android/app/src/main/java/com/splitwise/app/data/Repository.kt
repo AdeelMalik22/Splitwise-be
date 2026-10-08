@@ -108,6 +108,14 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     suspend fun searchUsers(query: String) = call { api.searchUsers(query.trim()) }
     suspend fun invite(groupId: Int, inviteeId: Int) = call { api.invite(InviteRequest(groupId, inviteeId)) }
 
+    suspend fun inviteByEmail(groupId: Int, email: String) = call { api.invite(InviteRequest(groupId, email = email.trim())) }
+
+    suspend fun lookupInvite(token: String) = call { clients.auth.lookupInvite(token) }
+    suspend fun joinWithInvite(token: String) = call { api.acceptInviteToken(TokenRequest(token)) }
+
+    val pendingInvite: Flow<String?> = tokens.pendingInvite
+    suspend fun setPendingInvite(token: String?) = tokens.setPendingInvite(token)
+
     suspend fun invites() = call { api.invites().results }
     suspend fun respondToInvite(id: Int, accept: Boolean) = call {
         if (accept) api.acceptInvite(id) else api.declineInvite(id)

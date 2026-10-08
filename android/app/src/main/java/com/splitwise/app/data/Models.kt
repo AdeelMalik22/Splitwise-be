@@ -103,12 +103,23 @@ data class Invite(
     val inviter: Int,
     @SerialName("inviter_username") val inviterUsername: String = "",
     @SerialName("inviter_name") val inviterName: String = "",
-    val invitee: Int,
+    val invitee: Int? = null,
     @SerialName("invitee_username") val inviteeUsername: String = "",
+    val email: String = "",
     val status: String,
 )
 
-@Serializable data class InviteRequest(val group: Int, val invitee: Int)
+/** Invite a member by id, or an outsider by [email] (exactly one of the two). */
+@Serializable data class InviteRequest(val group: Int, val invitee: Int? = null, val email: String? = null)
+
+@Serializable
+data class InviteLookup(
+    @SerialName("group_name") val groupName: String,
+    @SerialName("inviter_name") val inviterName: String,
+    @SerialName("email_hint") val emailHint: String = "",
+)
+@Serializable data class TokenRequest(val token: String)
+@Serializable data class JoinResult(@SerialName("group_id") val groupId: Int, @SerialName("group_name") val groupName: String)
 
 @Serializable
 data class AppNotification(

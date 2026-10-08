@@ -30,12 +30,14 @@ import com.splitwise.app.ui.*
 /** What a `splitease://` link asked for. */
 sealed interface DeepLink {
     data object Verified : DeepLink
+    data class Invite(val token: String) : DeepLink
 }
 
 fun parseDeepLink(uri: android.net.Uri?): DeepLink? {
     if (uri?.scheme != "splitease") return null
     return when (uri.host) {
         "login" -> if (uri.getQueryParameter("verified") == "1") DeepLink.Verified else null
+        "invite" -> uri.pathSegments.firstOrNull()?.takeIf { it.isNotBlank() }?.let { DeepLink.Invite(it) }
         else -> null
     }
 }
@@ -66,6 +68,9 @@ private inline fun <reified VM : ViewModel> appViewModel(key: String? = null, cr
 @Composable
 private fun AppRoot(deepLink: DeepLink?) {
     val session = appViewModel { SessionViewModel(it) }
+    // An invitation link is remembered until it is used, so it survives sign-up, email verification and login.
+    LaunchedEffect(deepLink) { (deepLink as? DeepLink.Invite)?.let { session.setPendingInvite(it.token) } }
+    val pendingInvite by session.pendingInvite.collectAsStateWithLifecycle(initialValue = null)
     val dark by session.darkMode.collectAsStateWithLifecycle(initialValue = null)
     SplitEaseTheme(darkOverride = dark) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -73,10 +78,10 @@ private fun AppRoot(deepLink: DeepLink?) {
             val loggedIn by session.loggedIn.collectAsStateWithLifecycle(initialValue = null)
             when (loggedIn) {
                 null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-                false -> AuthScreen(appViewModel { AuthViewModel(it) }, justVerified = deepLink is DeepLink.Verified)
+                false -> AuthScreen(appViewModel { AuthViewModel(it) }, justVerified = deepLink is DeepLink.Verified, pendingInvite = pendingInvite)
                 true -> {
                     val epoch by session.epoch.collectAsStateWithLifecycle()
-                    MainNav(session, dark ?: isSystemInDarkTheme(), epoch)
+                    MainNav(session, dark ?: isSystemInDarkTheme(), epoch, pendingInvite)
                 }
             }
         }
@@ -86,7 +91,7 @@ private fun AppRoot(deepLink: DeepLink?) {
 private val tabRoutes = mapOf("home" to Tab.Home, "groups" to Tab.Groups, "activity" to Tab.Activity, "account" to Tab.Account)
 
 @Composable
-private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int) {
+private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pendingInvite: String?) {
     val nav = rememberNavController()
     val userId by session.userId.collectAsStateWithLifecycle(initialValue = null)
     // One overview shared by every tab; re-created on sign-in because MainNav leaves composition on logout.
@@ -98,6 +103,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int) {
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
     val tab = tabRoutes[route]
     var showCreateGroup by remember { mutableStateOf(false) }
+    LaunchedEffect(pendingInvite) { if (pendingInvite != null) nav.navigate("join") { launchSingleTop = true } }
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); overviewVm.messageShown() } }
 
@@ -257,6 +263,19 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int) {
             }
             composable("profile/password") {
                 ChangePasswordScreen(onSave = { old, new -> overviewVm.changePassword(old, new) { nav.popBackStack() } }, onBack = { nav.popBackStack() })
+            }
+            composable("join") {
+                val token = pendingInvite
+                if (token != null) JoinGroupScreen(
+                    vm = appViewModel(key = "join-$token-$epoch") { JoinViewModel(it, token) },
+                    onJoined = { r ->
+                        session.setPendingInvite(null)
+                        overviewVm.refresh(silent = true)
+                        nav.popBackStack()
+                        nav.navigate("group/${r.groupId}?name=${android.net.Uri.encode(r.groupName)}")
+                    },
+                    onDismiss = { session.setPendingInvite(null); nav.popBackStack() },
+                )
             }
             composable("invites") {
                 TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { o ->

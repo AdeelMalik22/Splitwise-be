@@ -24,12 +24,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
-fun AuthScreen(vm: AuthViewModel, justVerified: Boolean = false) {
+fun AuthScreen(vm: AuthViewModel, justVerified: Boolean = false, pendingInvite: String? = null) {
     var register by rememberSaveable { mutableStateOf(false) }
     var forgot by rememberSaveable { mutableStateOf(false) }
     val state by vm.state.collectAsStateWithLifecycle()
     // Coming back from the emailed link: drop the stale "please verify" message.
     LaunchedEffect(justVerified) { if (justVerified) vm.clearError() }
+    LaunchedEffect(pendingInvite) { vm.loadInvitePreview(pendingInvite) }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when {
             state.verifyEmail != null -> VerifyEmailScreen(state, onResend = { vm.resendVerification(state.verifyEmail!!) }, onBack = { register = false; vm.backToLogin() })
@@ -96,6 +97,7 @@ private fun LoginForm(vm: AuthViewModel, justVerified: Boolean, onRegister: () -
             )
             Text("Split expenses, stay friends.", Modifier.padding(top = 4.dp), color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp))
         }
+        state.invitePreview?.let { InviteBanner(it, Modifier.padding(bottom = 16.dp)) }
         if (justVerified && state.error == null) {
             Text("✓ Email verified. Log in to continue.", color = MaterialTheme.split.owed, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 16.dp))
         }
@@ -132,6 +134,7 @@ private fun RegisterForm(vm: AuthViewModel, onLogin: () -> Unit) {
     Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
         NavBar("Create Account", onBack = onLogin)
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            state.invitePreview?.let { InviteBanner(it) }
             Text("Join SplitEase to start tracking shared expenses with friends and groups.", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp))
             state.error?.let { ErrorBanner(it) }
             IconField(name, { name = it }, "Full Name", Icons.Default.Person)
@@ -207,5 +210,21 @@ private fun ForgotPasswordForm(vm: AuthViewModel, state: AuthViewModel.State, on
                 PrimaryButton("Send reset link", { vm.forgotPassword(identifier) }, busy = state.busy)
             }
         }
+    }
+}
+
+
+@Composable
+private fun InviteBanner(invite: com.splitwise.app.data.InviteLookup, modifier: Modifier = Modifier) {
+    Column(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.split.primaryBg).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text("🎉 ${invite.inviterName} invited you to join \"${invite.groupName}\"", style = MaterialTheme.typography.titleSmall)
+        Text(
+            if (invite.emailHint.isNotBlank()) "Log in, or create an account with ${invite.emailHint}, and you'll join right away."
+            else "Log in or create an account and you'll join right away.",
+            color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
