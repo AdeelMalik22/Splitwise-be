@@ -37,3 +37,10 @@ class AuthenticationIntegrationTests(APITestCase):
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('access', response.data)
+
+
+class RefreshLifetimeTests(SimpleTestCase):
+    def test_refresh_tokens_last_long_enough_for_biometric_login(self):
+        from datetime import timedelta
+        from django.conf import settings
+        self.assertGreaterEqual(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'], timedelta(days=7))
