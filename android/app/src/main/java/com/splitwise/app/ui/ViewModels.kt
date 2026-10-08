@@ -32,6 +32,7 @@ class AuthViewModel(private val repo: Repository) : ViewModel() {
         val unverifiedLogin: String? = null,
         val notice: String? = null,
         val emailSent: Boolean = true,
+        val resetSent: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State())
@@ -68,6 +69,18 @@ class AuthViewModel(private val repo: Repository) : ViewModel() {
             repo.resendVerification(identifier).fold(
                 { _state.update { it.copy(notice = "If the account still needs verification, a new email is on its way.", error = null) } },
                 { e -> _state.update { it.copy(error = e.userMessage()) } },
+            )
+        }
+    }
+
+    fun forgotPassword(identifier: String) {
+        if (identifier.isBlank()) return fail("Enter your username or email.")
+        if (_state.value.busy) return
+        _state.value = State(busy = true)
+        viewModelScope.launch {
+            _state.value = repo.forgotPassword(identifier).fold(
+                { State(resetSent = true) },
+                { State(error = it.userMessage()) },
             )
         }
     }

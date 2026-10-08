@@ -26,14 +26,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun AuthScreen(vm: AuthViewModel, justVerified: Boolean = false) {
     var register by rememberSaveable { mutableStateOf(false) }
+    var forgot by rememberSaveable { mutableStateOf(false) }
     val state by vm.state.collectAsStateWithLifecycle()
     // Coming back from the emailed link: drop the stale "please verify" message.
     LaunchedEffect(justVerified) { if (justVerified) vm.clearError() }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         when {
             state.verifyEmail != null -> VerifyEmailScreen(state, onResend = { vm.resendVerification(state.verifyEmail!!) }, onBack = { register = false; vm.backToLogin() })
+            forgot -> ForgotPasswordForm(vm, state, onBack = { forgot = false; vm.backToLogin() })
             register -> RegisterForm(vm, onLogin = { register = false; vm.clearError() })
-            else -> LoginForm(vm, justVerified, onRegister = { register = true; vm.clearError() })
+            else -> LoginForm(vm, justVerified, onRegister = { register = true; vm.clearError() }, onForgot = { forgot = true; vm.clearError() })
         }
     }
 }
@@ -75,7 +77,7 @@ private fun VerifyEmailScreen(state: AuthViewModel.State, onResend: () -> Unit, 
 }
 
 @Composable
-private fun LoginForm(vm: AuthViewModel, justVerified: Boolean, onRegister: () -> Unit) {
+private fun LoginForm(vm: AuthViewModel, justVerified: Boolean, onRegister: () -> Unit, onForgot: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -105,6 +107,10 @@ private fun LoginForm(vm: AuthViewModel, justVerified: Boolean, onRegister: () -
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             IconField(username, { username = it }, "Username", Icons.Default.Person, error = state.error != null)
             IconField(password, { password = it }, "Password", Icons.Default.Lock, password = true, error = state.error != null, onDone = { vm.login(username, password) })
+            Text(
+                "Forgot password?", Modifier.align(Alignment.End).clickable(onClick = onForgot),
+                color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+            )
             PrimaryButton("Log In", { vm.login(username, password) }, busy = state.busy, modifier = Modifier.padding(top = 4.dp))
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.Center) {
                 Text("Don't have an account? ", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp))
@@ -176,5 +182,30 @@ private fun PasswordStrength(password: String) {
             }
         }
         Text(label, color = color, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium))
+    }
+}
+
+
+@Composable
+private fun ForgotPasswordForm(vm: AuthViewModel, state: AuthViewModel.State, onBack: () -> Unit) {
+    var identifier by rememberSaveable { mutableStateOf("") }
+    Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+        NavBar("Reset password", onBack)
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (state.resetSent) {
+                Text("Check your inbox", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "If an account matches, we've emailed a link to choose a new password. It works for one hour. " +
+                        "Open it on this phone, set your password, then come back and log in.",
+                    color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodyMedium,
+                )
+                PrimaryButton("Back to log in", onBack)
+            } else {
+                Text("Enter your username or the email you signed up with and we'll send you a reset link.", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodyMedium)
+                state.error?.let { ErrorBanner(it) }
+                IconField(identifier, { identifier = it }, "Username or email", Icons.Default.Email, keyboard = KeyboardType.Email, onDone = { vm.forgotPassword(identifier) })
+                PrimaryButton("Send reset link", { vm.forgotPassword(identifier) }, busy = state.busy)
+            }
+        }
     }
 }

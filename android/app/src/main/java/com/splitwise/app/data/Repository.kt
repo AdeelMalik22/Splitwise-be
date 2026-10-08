@@ -72,6 +72,8 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
         clients.auth.register(RegisterRequest(username.trim(), name.trim(), email.trim(), password))
     }
 
+    suspend fun forgotPassword(identifier: String) = call { clients.auth.forgotPassword(IdentifierRequest(identifier.trim())) }
+
     suspend fun resendVerification(identifier: String) = call { clients.auth.resendVerification(IdentifierRequest(identifier.trim())) }
 
     suspend fun logout() = tokens.clear()
