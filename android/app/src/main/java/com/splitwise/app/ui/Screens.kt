@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.splitwise.app.data.*
 
 // ───────────────────────── Auth ─────────────────────────
@@ -162,10 +163,20 @@ fun GroupDetailScreen(vm: GroupDetailViewModel, title: String, onBack: () -> Uni
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.refresh()
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.refresh(silent = true)
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Poll while the screen is visible so other members' expenses appear on their own.
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (true) {
+                kotlinx.coroutines.delay(10_000)
+                vm.refresh(silent = true)
+            }
+        }
     }
 
     Scaffold(
@@ -173,7 +184,7 @@ fun GroupDetailScreen(vm: GroupDetailViewModel, title: String, onBack: () -> Uni
             TopAppBar(
                 title = { Text(title) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-                actions = { IconButton(onClick = vm::refresh) { Icon(Icons.Default.Refresh, "Refresh") } },
+                actions = { IconButton(onClick = { vm.refresh() }) { Icon(Icons.Default.Refresh, "Refresh") } },
             )
         },
         floatingActionButton = {
@@ -189,9 +200,9 @@ fun GroupDetailScreen(vm: GroupDetailViewModel, title: String, onBack: () -> Uni
             }
             val names = (state.members as? Load.Ready)?.data.orEmpty().associate { it.id to it.username }
             when (tab) {
-                0 -> LoadView(state.expenses, vm::refresh) { ExpensesTab(it, names) }
-                1 -> LoadView(state.settlements, vm::refresh) { BalancesTab(it) }
-                else -> LoadView(state.members, vm::refresh) { MembersTab(it, state.searchResults, vm::search, vm::invite) }
+                0 -> LoadView(state.expenses, { vm.refresh() }) { ExpensesTab(it, names) }
+                1 -> LoadView(state.settlements, { vm.refresh() }) { BalancesTab(it) }
+                else -> LoadView(state.members, { vm.refresh() }) { MembersTab(it, state.searchResults, vm::search, vm::invite) }
             }
         }
     }

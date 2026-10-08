@@ -19,7 +19,9 @@ android {
     buildTypes {
         debug {
             // Reached via `adb reverse tcp:8000 tcp:8000` (works for a USB phone and the emulator).
-            buildConfigField("String", "API_BASE_URL", "\"http://localhost:8000/\"")
+            // Override with: ./gradlew assembleDebug -PapiBaseUrl=https://your-tunnel.example/
+            val apiBaseUrl = providers.gradleProperty("apiBaseUrl").orElse("http://localhost:8000/").get()
+            buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         }
         release {
             isMinifyEnabled = true

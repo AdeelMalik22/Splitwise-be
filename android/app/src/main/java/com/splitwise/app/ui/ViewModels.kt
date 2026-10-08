@@ -94,12 +94,18 @@ class GroupDetailViewModel(private val repo: Repository, private val groupId: In
 
     init { refresh() }
 
-    fun refresh() {
+    /** [silent] polls in the background: failures keep the data already on screen. */
+    fun refresh(silent: Boolean = false) {
         viewModelScope.launch {
             val e = async { repo.expenses(groupId) }
             val s = async { repo.settlements(groupId) }
             val m = async { repo.members(groupId) }
-            _state.update { it.copy(expenses = e.await().toLoad(), settlements = s.await().toLoad(), members = m.await().toLoad()) }
+            val (er, sr, mr) = Triple(e.await(), s.await(), m.await())
+            _state.update { cur ->
+                fun <T> pick(r: Result<T>, old: Load<T>): Load<T> =
+                    if (silent && r.isFailure && old is Load.Ready) old else r.toLoad()
+                cur.copy(expenses = pick(er, cur.expenses), settlements = pick(sr, cur.settlements), members = pick(mr, cur.members))
+            }
         }
     }
 
