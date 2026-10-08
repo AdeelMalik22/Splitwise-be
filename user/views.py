@@ -4,6 +4,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from core.activity import log_activity
 from core.models import UserGroup, Group
 from user.models import User, GroupInvite
 from user.invite_serializers import UserSearchSerializer, GroupInviteSerializer
@@ -101,6 +102,7 @@ class GroupInviteViewSet(viewsets.ModelViewSet):
         if not invite:
             return Response({'detail': 'Pending invite not found.'}, status=404)
         UserGroup.objects.get_or_create(user_id=request.user, group_id=invite.group)
+        log_activity(request.user, 'joined', 'group', invite.group_id, group=invite.group)
         invite.status = GroupInvite.ACCEPTED
         invite.save(update_fields=('status',))
         return Response(GroupInviteSerializer(invite).data)

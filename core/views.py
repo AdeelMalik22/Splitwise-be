@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from core.models import Group, UserGroup, Expense, ExpenseParticipant, Payment, Notification, Activity
 from core.payment_serializers import PaymentSerializer
 from core.notification_serializers import NotificationSerializer
+from core.activity import log_activity
 from core.activity_serializers import ActivitySerializer
 from django.utils import timezone
 from core.serializers import GroupSerializer, UserGroupSerializer, ExpenseSerializer
@@ -31,7 +32,17 @@ class GroupViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         group = serializer.save(created_by=self.request.user)
         UserGroup.objects.get_or_create(user_id=self.request.user, group_id=group)
-        Activity.objects.create(actor=self.request.user, action='created', entity_type='group', entity_id=group.pk)
+        log_activity(self.request.user, 'created', 'group', group.pk, group=group)
+
+    def perform_update(self, serializer):
+        old_name = serializer.instance.name
+        group = serializer.save()
+        log_activity(self.request.user, 'updated', 'group', group.pk, group=group,
+                     **({'old_name': old_name} if old_name != group.name else {}))
+
+    def perform_destroy(self, instance):
+        log_activity(self.request.user, 'deleted', 'group', instance.pk, group=instance)
+        instance.delete()
 
     @staticmethod
     def _not_owner(group, user):
@@ -51,7 +62,7 @@ class GroupViewSet(viewsets.ModelViewSet):
         denied = self._not_owner(group, request.user)
         if denied:
             return denied
-        group.delete()
+        self.perform_destroy(group)
         return Response({"detail": "Group and its associate records have been deleted."}, status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['delete'], url_path=r'members/(?P<user_id>\d+)')
@@ -62,9 +73,12 @@ class GroupViewSet(viewsets.ModelViewSet):
             return denied
         if int(user_id) == group.created_by_id:
             return Response({'detail': 'The creator cannot be removed.'}, status=status.HTTP_400_BAD_REQUEST)
+        target = User.objects.filter(pk=user_id).first()
         removed, _ = UserGroup.objects.filter(group_id=group, user_id=user_id).delete()
         if not removed:
             return Response({'detail': 'Not a member of this group.'}, status=status.HTTP_404_NOT_FOUND)
+        log_activity(request.user, 'removed', 'member', user_id, group=group,
+                     member=target.username if target else str(user_id))
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -75,6 +89,15 @@ class UserGroupViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return UserGroup.objects.filter(user_id=self.request.user.pk)
+
+    def perform_create(self, serializer):
+        membership = serializer.save()
+        log_activity(self.request.user, 'joined', 'group', membership.group_id_id, group=membership.group_id)
+
+    def perform_destroy(self, instance):
+        group = instance.group_id
+        instance.delete()
+        log_activity(self.request.user, 'left', 'group', group.pk, group=group)
 
     @action(detail=True, methods=['get'], url_path="users")
     def get_group_users(self, request, pk=None):
@@ -108,18 +131,22 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         expense = serializer.save()
         self._invalidate_cache(expense.group_id_id)
-        Activity.objects.create(actor=self.request.user, action='created', entity_type='expense', entity_id=expense.pk)
+        log_activity(self.request.user, 'added', 'expense', expense.pk, group=expense.group_id,
+                     name=expense.name, amount=str(expense.amount))
 
     def perform_update(self, serializer):
         old_group = serializer.instance.group_id_id
         expense = serializer.save()
         self._invalidate_cache(old_group)
         self._invalidate_cache(expense.group_id_id)
+        log_activity(self.request.user, 'edited', 'expense', expense.pk, group=expense.group_id,
+                     name=expense.name, amount=str(expense.amount))
 
     def perform_destroy(self, instance):
-        group_id = instance.group_id_id
+        group, name, amount, pk = instance.group_id, instance.name, str(instance.amount), instance.pk
         instance.delete()
-        self._invalidate_cache(group_id)
+        self._invalidate_cache(group.pk)
+        log_activity(self.request.user, 'deleted', 'expense', pk, group=group, name=name, amount=amount)
 
 
     def list(self, request, *args, **kwargs):
@@ -169,7 +196,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
             recipient=payment.payee, notification_type='payment',
             message=f'{payment.payer.username} says they paid you Rs {payment.amount} in {payment.group.name}. Confirm when received.',
         )
-        Activity.objects.create(actor=self.request.user, action='created', entity_type='payment', entity_id=payment.pk)
+        log_activity(self.request.user, 'paid', 'payment', payment.pk, group=payment.group,
+                     amount=str(payment.amount), to=payment.payee.username)
 
     def destroy(self, request, *args, **kwargs):
         payment = self.get_object()
@@ -177,6 +205,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Only the payer can cancel a payment.'}, status=status.HTTP_403_FORBIDDEN)
         if payment.status != Payment.PENDING:
             return Response({'detail': 'Completed payments cannot be cancelled.'}, status=status.HTTP_400_BAD_REQUEST)
+        log_activity(request.user, 'cancelled', 'payment', payment.pk, group=payment.group,
+                     amount=str(payment.amount), to=payment.payee.username)
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'])
@@ -188,6 +218,8 @@ class PaymentViewSet(viewsets.ModelViewSet):
             payment.status = Payment.COMPLETED
             payment.completed_at = timezone.now()
             payment.save(update_fields=('status', 'completed_at'))
+            log_activity(request.user, 'confirmed', 'payment', payment.pk, group=payment.group,
+                         amount=str(payment.amount), **{'from': payment.payer.username})
             Notification.objects.create(
                 recipient=payment.payer, notification_type='payment',
                 message=f'{payment.payee.username} confirmed your Rs {payment.amount} payment in {payment.group.name}.',
@@ -216,4 +248,7 @@ class ActivityViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Activity.objects.filter(actor=self.request.user)
+        """The user's own actions plus everything that happened in groups they belong to."""
+        user = self.request.user
+        my_groups = UserGroup.objects.filter(user_id=user).values('group_id')
+        return Activity.objects.filter(Q(actor=user) | Q(group_id__in=my_groups)).select_related('actor').order_by('-created_at', '-id')

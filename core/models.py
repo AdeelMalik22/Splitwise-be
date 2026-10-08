@@ -106,6 +106,8 @@ class Activity(models.Model):
     action = models.CharField(max_length=100)
     entity_type = models.CharField(max_length=50)
     entity_id = models.PositiveIntegerField(null=True, blank=True)
+    # Plain id (not a foreign key) so events about a deleted group stay readable by the actor.
+    group_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
