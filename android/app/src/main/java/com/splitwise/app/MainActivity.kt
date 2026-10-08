@@ -27,11 +27,33 @@ import androidx.navigation.navArgument
 import com.splitwise.app.data.Repository
 import com.splitwise.app.ui.*
 
+/** What a `splitease://` link asked for. */
+sealed interface DeepLink {
+    data object Verified : DeepLink
+}
+
+fun parseDeepLink(uri: android.net.Uri?): DeepLink? {
+    if (uri?.scheme != "splitease") return null
+    return when (uri.host) {
+        "login" -> if (uri.getQueryParameter("verified") == "1") DeepLink.Verified else null
+        else -> null
+    }
+}
+
 class MainActivity : ComponentActivity() {
+    private val deepLink = mutableStateOf<DeepLink?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { AppRoot() }
+        deepLink.value = parseDeepLink(intent?.data)
+        setContent { AppRoot(deepLink.value) }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        parseDeepLink(intent.data)?.let { deepLink.value = it }
     }
 }
 
@@ -42,7 +64,7 @@ private inline fun <reified VM : ViewModel> appViewModel(key: String? = null, cr
 }
 
 @Composable
-private fun AppRoot() {
+private fun AppRoot(deepLink: DeepLink?) {
     val session = appViewModel { SessionViewModel(it) }
     val dark by session.darkMode.collectAsStateWithLifecycle(initialValue = null)
     SplitEaseTheme(darkOverride = dark) {
@@ -51,7 +73,7 @@ private fun AppRoot() {
             val loggedIn by session.loggedIn.collectAsStateWithLifecycle(initialValue = null)
             when (loggedIn) {
                 null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-                false -> AuthScreen(appViewModel { AuthViewModel(it) })
+                false -> AuthScreen(appViewModel { AuthViewModel(it) }, justVerified = deepLink is DeepLink.Verified)
                 true -> {
                     val epoch by session.epoch.collectAsStateWithLifecycle()
                     MainNav(session, dark ?: isSystemInDarkTheme(), epoch)

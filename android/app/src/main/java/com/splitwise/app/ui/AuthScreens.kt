@@ -24,16 +24,58 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
-fun AuthScreen(vm: AuthViewModel) {
+fun AuthScreen(vm: AuthViewModel, justVerified: Boolean = false) {
     var register by rememberSaveable { mutableStateOf(false) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    // Coming back from the emailed link: drop the stale "please verify" message.
+    LaunchedEffect(justVerified) { if (justVerified) vm.clearError() }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        if (register) RegisterForm(vm, onLogin = { register = false; vm.clearError() })
-        else LoginForm(vm, onRegister = { register = true; vm.clearError() })
+        when {
+            state.verifyEmail != null -> VerifyEmailScreen(state, onResend = { vm.resendVerification(state.verifyEmail!!) }, onBack = { register = false; vm.backToLogin() })
+            register -> RegisterForm(vm, onLogin = { register = false; vm.clearError() })
+            else -> LoginForm(vm, justVerified, onRegister = { register = true; vm.clearError() })
+        }
     }
 }
 
 @Composable
-private fun LoginForm(vm: AuthViewModel, onRegister: () -> Unit) {
+private fun VerifyEmailScreen(state: AuthViewModel.State, onResend: () -> Unit, onBack: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var cooldown by remember { mutableIntStateOf(0) }
+    LaunchedEffect(cooldown) { if (cooldown > 0) { kotlinx.coroutines.delay(1000); cooldown-- } }
+    Column(
+        Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    ) {
+        Box(Modifier.size(88.dp).clip(androidx.compose.foundation.shape.CircleShape).background(MaterialTheme.split.primaryBg), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Email, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("Check your inbox", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (state.emailSent) "We sent a verification link to ${state.verifyEmail}. Open it to activate your account, then come back and log in."
+            else "Your account was created, but we couldn't send the email just now. Tap Resend to try again.",
+            color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodyMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        state.notice?.let { Spacer(Modifier.height(12.dp)); Text(it, color = MaterialTheme.split.owed, style = MaterialTheme.typography.bodySmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+        state.error?.let { Spacer(Modifier.height(12.dp)); ErrorBanner(it) }
+        Spacer(Modifier.height(24.dp))
+        PrimaryButton("Open email app", {
+            runCatching {
+                context.startActivity(android.content.Intent.makeMainSelectorActivity(android.content.Intent.ACTION_MAIN, android.content.Intent.CATEGORY_APP_EMAIL).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        })
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = { onResend(); cooldown = 30 }, enabled = cooldown == 0) {
+            Text(if (cooldown > 0) "Resend email in ${cooldown}s" else "Resend email")
+        }
+        TextButton(onClick = onBack) { Text("Back to log in") }
+    }
+}
+
+@Composable
+private fun LoginForm(vm: AuthViewModel, justVerified: Boolean, onRegister: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -52,7 +94,14 @@ private fun LoginForm(vm: AuthViewModel, onRegister: () -> Unit) {
             )
             Text("Split expenses, stay friends.", Modifier.padding(top = 4.dp), color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp))
         }
-        state.error?.let { ErrorBanner(it, Modifier.padding(bottom = 20.dp)) }
+        if (justVerified && state.error == null) {
+            Text("✓ Email verified. Log in to continue.", color = MaterialTheme.split.owed, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 16.dp))
+        }
+        state.notice?.let { Text(it, color = MaterialTheme.split.owed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 12.dp)) }
+        state.error?.let { ErrorBanner(it, Modifier.padding(bottom = if (state.unverifiedLogin != null) 4.dp else 20.dp)) }
+        state.unverifiedLogin?.let { who ->
+            TextButton(onClick = { vm.resendVerification(who) }, modifier = Modifier.padding(bottom = 12.dp)) { Text("Resend verification email") }
+        }
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             IconField(username, { username = it }, "Username", Icons.Default.Person, error = state.error != null)
             IconField(password, { password = it }, "Password", Icons.Default.Lock, password = true, error = state.error != null, onDone = { vm.login(username, password) })

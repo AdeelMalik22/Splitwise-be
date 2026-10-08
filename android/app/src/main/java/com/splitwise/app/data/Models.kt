@@ -153,3 +153,7 @@ data class Payment(
 @Serializable data class ProfileUpdate(val name: String, val email: String)
 @Serializable data class ChangePasswordRequest(@SerialName("old_password") val oldPassword: String, @SerialName("new_password") val newPassword: String)
 @Serializable data class DeleteAccountRequest(val password: String)
+
+@Serializable
+data class RegisterResponse(val id: Int, val username: String, val email: String, @SerialName("email_sent") val emailSent: Boolean = true)
+@Serializable data class IdentifierRequest(val identifier: String)

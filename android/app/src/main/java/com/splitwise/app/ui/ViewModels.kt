@@ -21,33 +21,60 @@ private fun <T> Result<T>.toLoad(): Load<T> =
     fold({ Load.Ready(it) }, { Load.Error(it.userMessage()) })
 
 class AuthViewModel(private val repo: Repository) : ViewModel() {
-    data class State(val busy: Boolean = false, val error: String? = null)
+    /**
+     * [verifyEmail]: show the "check your inbox" screen for this address.
+     * [unverifiedLogin]: the last login failed only because the email is unverified (offer to resend).
+     */
+    data class State(
+        val busy: Boolean = false,
+        val error: String? = null,
+        val verifyEmail: String? = null,
+        val unverifiedLogin: String? = null,
+        val notice: String? = null,
+        val emailSent: Boolean = true,
+    )
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
     fun login(username: String, password: String) {
         if (username.isBlank() || password.isEmpty()) return fail("Enter your username and password.")
-        run { repo.login(username, password) }
+        if (_state.value.busy) return
+        _state.value = State(busy = true)
+        viewModelScope.launch {
+            // On success the session flow flips and the UI leaves the auth screen.
+            _state.value = repo.login(username, password).fold(
+                { State() },
+                { e -> if (e is EmailNotVerifiedException) State(error = e.message, unverifiedLogin = username.trim()) else State(error = e.userMessage()) },
+            )
+        }
     }
 
     fun register(username: String, name: String, email: String, password: String) {
         if (username.isBlank() || email.isBlank()) return fail("Username and email are required.")
         if (password.length < 8) return fail("Password must be at least 8 characters.")
-        run { repo.register(username, name, email, password) }
-    }
-
-    fun clearError() = _state.update { it.copy(error = null) }
-    private fun fail(msg: String) = _state.update { it.copy(error = msg) }
-
-    private fun run(block: suspend () -> Result<Unit>) {
         if (_state.value.busy) return
         _state.value = State(busy = true)
         viewModelScope.launch {
-            // On success the session flow flips and the UI leaves the auth screen.
-            _state.value = block().fold({ State() }, { State(error = it.userMessage()) })
+            _state.value = repo.register(username, name, email, password).fold(
+                { State(verifyEmail = email.trim(), emailSent = it.emailSent) },
+                { State(error = it.userMessage()) },
+            )
         }
     }
+
+    fun resendVerification(identifier: String) {
+        viewModelScope.launch {
+            repo.resendVerification(identifier).fold(
+                { _state.update { it.copy(notice = "If the account still needs verification, a new email is on its way.", error = null) } },
+                { e -> _state.update { it.copy(error = e.userMessage()) } },
+            )
+        }
+    }
+
+    fun backToLogin() { _state.value = State() }
+    fun clearError() = _state.update { it.copy(error = null, notice = null, unverifiedLogin = null) }
+    private fun fail(msg: String) = _state.update { it.copy(error = msg) }
 }
 
 class SessionViewModel(private val repo: Repository) : ViewModel() {

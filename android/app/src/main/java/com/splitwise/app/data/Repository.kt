@@ -13,6 +13,8 @@ import kotlinx.serialization.json.jsonObject
 import retrofit2.HttpException
 import java.io.IOException
 
+class EmailNotVerifiedException : Exception("Please verify your email address first. Check your inbox for the link.")
+
 /** Turns any failure into a user-readable message (DRF error bodies are flattened). */
 fun Throwable.userMessage(): String = when (this) {
     is HttpException -> {
@@ -56,15 +58,21 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     suspend fun setDarkMode(dark: Boolean) = tokens.setDarkMode(dark)
 
     suspend fun login(username: String, password: String) = call {
-        val pair = clients.auth.login(LoginRequest(username.trim(), password))
+        val pair = try {
+            clients.auth.login(LoginRequest(username.trim(), password))
+        } catch (e: HttpException) {
+            // 403 from the login endpoint means "valid credentials, email not verified yet".
+            if (e.code() == 403) throw EmailNotVerifiedException() else throw e
+        }
         tokens.save(pair.access, pair.refresh)
     }
 
+    /** Creates the account; the user must verify their email before they can log in. */
     suspend fun register(username: String, name: String, email: String, password: String) = call {
         clients.auth.register(RegisterRequest(username.trim(), name.trim(), email.trim(), password))
-        val pair = clients.auth.login(LoginRequest(username.trim(), password))
-        tokens.save(pair.access, pair.refresh)
     }
+
+    suspend fun resendVerification(identifier: String) = call { clients.auth.resendVerification(IdentifierRequest(identifier.trim())) }
 
     suspend fun logout() = tokens.clear()
 

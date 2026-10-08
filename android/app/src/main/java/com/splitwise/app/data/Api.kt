@@ -12,7 +12,8 @@ import retrofit2.http.Query
 interface AuthApi {
     @POST("login/") suspend fun login(@Body body: LoginRequest): TokenPair
     @POST("login/refresh/") suspend fun refresh(@Body body: RefreshRequest): AccessToken
-    @POST("users/register/") suspend fun register(@Body body: RegisterRequest): UserSummary
+    @POST("users/register/") suspend fun register(@Body body: RegisterRequest): RegisterResponse
+    @POST("users/resend_verification/") suspend fun resendVerification(@Body body: IdentifierRequest)
 }
 
 interface SplitwiseApi {
