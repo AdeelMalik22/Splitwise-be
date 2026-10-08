@@ -84,9 +84,26 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Expense.objects.filter(group_id__usergroup__user_id=self.request.user.pk)
 
+    @staticmethod
+    def _invalidate_cache(group_id):
+        member_ids = UserGroup.objects.filter(group_id=group_id).values_list('user_id', flat=True)
+        cache.delete_many([f"expense-data-user-{uid}" for uid in member_ids])
+
     def perform_create(self, serializer):
         expense = serializer.save()
+        self._invalidate_cache(expense.group_id_id)
         Activity.objects.create(actor=self.request.user, action='created', entity_type='expense', entity_id=expense.pk)
+
+    def perform_update(self, serializer):
+        old_group = serializer.instance.group_id_id
+        expense = serializer.save()
+        self._invalidate_cache(old_group)
+        self._invalidate_cache(expense.group_id_id)
+
+    def perform_destroy(self, instance):
+        group_id = instance.group_id_id
+        instance.delete()
+        self._invalidate_cache(group_id)
 
 
     def list(self, request, *args, **kwargs):
