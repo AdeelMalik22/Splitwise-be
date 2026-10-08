@@ -18,8 +18,8 @@ android {
 
     buildTypes {
         debug {
-            // 10.0.2.2 is the host machine as seen from the Android emulator.
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/\"")
+            // Reached via `adb reverse tcp:8000 tcp:8000` (works for a USB phone and the emulator).
+            buildConfigField("String", "API_BASE_URL", "\"http://localhost:8000/\"")
         }
         release {
             isMinifyEnabled = true

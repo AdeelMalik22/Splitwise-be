@@ -19,7 +19,7 @@ add equal-split expense, invite users by username, accept/decline invites, notif
 
 1. Start the API: `python manage.py runserver` (optionally `python manage.py seed_demo_data`;
    demo password `SplitwiseDemo!2026`).
-2. Open `android/` in Android Studio and run on an emulator (debug builds call `http://10.0.2.2:8000/`),
+2. Open `android/` in Android Studio and run on an emulator (debug builds call `http://localhost:8000/`, forwarded to your computer with `adb reverse tcp:8000 tcp:8000`),
    or build from the CLI: `cd android && ./gradlew :app:assembleDebug`.
 
 For a physical device or a deployment, change `API_BASE_URL` in `app/build.gradle.kts`
