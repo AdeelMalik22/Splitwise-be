@@ -232,7 +232,10 @@ EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true'
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'webmaster@localhost')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL') or EMAIL_HOST_USER or 'webmaster@localhost'
+
+# Base URL used in emailed links, e.g. http://15.134.231.253:8000 (falls back to the incoming request's origin).
+PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', '')
 
 REST_FRAMEWORK.update({
     'DEFAULT_THROTTLE_CLASSES': (
@@ -242,6 +245,7 @@ REST_FRAMEWORK.update({
     'DEFAULT_THROTTLE_RATES': {
         'anon': os.getenv('DRF_ANON_RATE', '20/minute'),
         'user': os.getenv('DRF_USER_RATE', '120/minute'),
+        'email': os.getenv('DRF_EMAIL_RATE', '10/hour'),  # endpoints that send email
     },
     'PAGE_SIZE': int(os.getenv('DRF_PAGE_SIZE', '50')),
 })

@@ -54,3 +54,22 @@ Runs Caddy (automatic HTTPS) -> Django (gunicorn) -> PostgreSQL on one instance.
 6. Back up the database regularly, e.g. a daily cron job:
    `docker compose exec -T db pg_dump -U splitwise splitwise | gzip > ~/backup-$(date +%F).sql.gz`
 7. Set an AWS billing alert so spend never surprises you.
+
+
+## Email (verification, password reset, invitations)
+
+New accounts must verify their email before they can log in, and the app sends password-reset and
+invitation emails. Configure SMTP with environment variables on the server (never commit them):
+
+```bash
+export EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+export EMAIL_HOST=smtp.gmail.com EMAIL_PORT=587 EMAIL_USE_TLS=True
+export EMAIL_HOST_USER='you@gmail.com'
+export EMAIL_HOST_PASSWORD='<16-character Google app password>'   # not your normal Gmail password
+export DEFAULT_FROM_EMAIL='SplitEase <you@gmail.com>'
+export PUBLIC_BASE_URL='http://<server-ip>:8000'                 # used for links inside emails
+```
+
+Restart gunicorn afterwards. If email is misconfigured the API still works; the app offers a
+"Resend email" button, and `python manage.py shell -c "from user.models import User; User.objects.filter(username='x').update(email_verified=True)"`
+can unblock an account manually. Accounts that existed before this feature are treated as verified.

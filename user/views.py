@@ -8,6 +8,9 @@ from core.activity import log_activity
 from core.models import UserGroup, Group
 from user.models import User, GroupInvite
 from user.invite_serializers import UserSearchSerializer, GroupInviteSerializer
+from user.emails import read_verify_token, send_verification_email
+from user.pages import app_link, page
+from user.throttles import EmailRateThrottle
 from user.serializers import ChangePasswordSerializer, DeleteAccountSerializer, UserSerializer
 
 from .serializers import MyTokenObtainPairSerializer
@@ -46,7 +49,32 @@ class UserVietSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        return Response(self.get_serializer(user).data, status=status.HTTP_201_CREATED)
+        sent = send_verification_email(user, request)
+        return Response({**self.get_serializer(user).data, 'email_sent': sent}, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny], authentication_classes=[],
+            throttle_classes=[], url_path='verify_email')
+    def verify_email(self, request):
+        """Opened from the emailed link in a browser."""
+        user = read_verify_token(request.query_params.get('token', ''))
+        if user is None:
+            return page('Link expired', 'This verification link is invalid or has expired. Open SplitEase and request a new one.',
+                        [('Open SplitEase', app_link('login'), True)], status=400)
+        if not user.email_verified:
+            user.email_verified = True
+            user.save(update_fields=('email_verified',))
+        return page('Email verified ✓', 'Your email is confirmed. Open the app and log in to get started.',
+                    [('Open SplitEase', app_link('login?verified=1'), True)])
+
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny], authentication_classes=[],
+            throttle_classes=[EmailRateThrottle], url_path='resend_verification')
+    def resend_verification(self, request):
+        """Always answers the same way so the endpoint can't be used to discover which emails have accounts."""
+        ident = str(request.data.get('identifier', '')).strip()
+        user = User.objects.filter(Q(email__iexact=ident) | Q(username=ident)).first() if ident else None
+        if user is not None and not user.email_verified:
+            send_verification_email(user, request)
+        return Response({'detail': 'If that account needs verification, a new email is on its way.'})
 
     @action(detail=False, methods=['post'], url_path='change_password')
     def change_password(self, request):

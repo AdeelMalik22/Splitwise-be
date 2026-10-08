@@ -27,6 +27,14 @@ services:
       DJANGO_ALLOWED_HOSTS: ${DOMAIN:?set DOMAIN in .env}
       CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
       DATABASE_URL: postgresql://${POSTGRES_USER:-splitwise}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-splitwise}
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.console.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-True}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
     # Migrate and create the cache table on every start, then serve.
     command: >
       sh -c "python manage.py migrate --noinput &&

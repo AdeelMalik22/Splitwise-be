@@ -1,10 +1,22 @@
 from rest_framework import serializers
+from rest_framework.exceptions import APIException
 
 from user.models import User
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
+class EmailNotVerified(APIException):
+    status_code = 403
+    default_code = 'email_not_verified'
+    default_detail = 'Please verify your email address before logging in. Check your inbox for the link.'
+
+
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)  # raises 401 for wrong credentials first
+        if not self.user.email_verified:
+            raise EmailNotVerified({'detail': EmailNotVerified.default_detail, 'code': 'email_not_verified'})
+        return data
 
     @classmethod
     def get_token(cls, user):
@@ -20,7 +32,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'name', 'email', 'password')
+        fields = ('id', 'username', 'name', 'email', 'password', 'email_verified')
+        read_only_fields = ('email_verified',)
 
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)

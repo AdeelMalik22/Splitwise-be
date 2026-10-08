@@ -21,6 +21,10 @@ class AuthenticationIntegrationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertNotIn('password', response.data)
 
+        # Login stays closed until the emailed link has been opened.
+        from user.models import User
+        User.objects.filter(username='alice').update(email_verified=True)
+
         response = self.client.post('/login/', {
             'username': 'alice', 'password': payload['password'],
         }, format='json')

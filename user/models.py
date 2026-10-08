@@ -9,6 +9,12 @@ class User(AbstractUser):
     username = models.CharField(max_length=30, unique=True)
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=255)
+    email_verified = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        if self.is_superuser:
+            self.email_verified = True  # admins created on the command line have no mailbox step
+        super().save(*args, **kwargs)
 
 
 class GroupInvite(models.Model):
