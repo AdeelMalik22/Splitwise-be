@@ -1,0 +1,10 @@
+.git
+.venv
+.idea
+android
+postman
+**/__pycache__
+*.pyc
+.env
+.env.*
+!.env.production.example
