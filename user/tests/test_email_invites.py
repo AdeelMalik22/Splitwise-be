@@ -42,9 +42,33 @@ class EmailInviteTests(APITestCase):
         self.client.force_authenticate(other)
         self.assertEqual(self.invite().status_code, status.HTTP_400_BAD_REQUEST)  # not a member
 
-    def test_duplicate_and_existing_member_invites_are_rejected(self):
-        self.assertEqual(self.invite().status_code, 201)
-        self.assertEqual(self.invite().status_code, 400)
+    def test_inviting_the_same_address_again_resends_the_email(self):
+        first = self.invite()
+        self.assertEqual(first.status_code, 201)
+        token = self.token()
+        from datetime import timedelta
+        from django.utils import timezone
+        GroupInvite.objects.filter(token=token).update(created_at=timezone.now() - timedelta(days=6))
+
+        again = self.invite('FRIEND@example.com')
+        self.assertEqual(again.status_code, 201)
+        self.assertEqual(again.data['id'], first.data['id'])
+        self.assertEqual(GroupInvite.objects.filter(email='friend@example.com').count(), 1)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(self.token(), token)  # same link, so the earlier email still works
+        self.assertFalse(GroupInvite.objects.get(token=token).expired)
+        self.assertGreater(GroupInvite.objects.get(token=token).created_at, timezone.now() - timedelta(minutes=1))
+
+    def test_cannot_resend_after_the_invite_was_used(self):
+        self.invite()
+        token = self.token()
+        friend = User.objects.create_user(username='friend', email='friend@example.com', password='password-123', email_verified=True)
+        self.client.force_authenticate(friend)
+        self.client.post('/invites/accept_token/', {'token': token}, format='json')
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(self.invite().status_code, 400)  # now a member
+
+    def test_existing_member_and_self_invites_are_rejected(self):
         self.assertEqual(self.invite('o@example.com').status_code, 400)  # yourself
 
     def test_existing_account_is_linked_so_it_shows_in_their_invites(self):

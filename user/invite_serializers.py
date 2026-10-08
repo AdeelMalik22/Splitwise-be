@@ -41,9 +41,7 @@ class GroupInviteSerializer(serializers.ModelSerializer):
             existing = User.objects.filter(email__iexact=email).first()
             if existing is not None:
                 invitee = attrs['invitee'] = existing  # they already have an account: it shows up in their Invites too
-            attrs['email'] = email
-            if GroupInvite.objects.filter(group=group, email=email, status=GroupInvite.PENDING).exists():
-                raise serializers.ValidationError({'email': 'This address has already been invited.'})
+            attrs['email'] = email  # an address that is already invited is simply re-sent (see the view)
         if invitee is not None and (invitee == request.user or UserGroup.objects.filter(user_id=invitee, group_id=group).exists()):
             raise serializers.ValidationError({'email' if email else 'invitee': 'This user is already a group member.'})
         if invitee is not None and not email and GroupInvite.objects.filter(group=group, invitee=invitee, status=GroupInvite.PENDING).exists():

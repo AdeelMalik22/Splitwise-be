@@ -2,6 +2,7 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.conf import settings
+from django.utils import timezone
 from django.db.models import Q
 from django.utils.html import escape
 from rest_framework import viewsets, status
@@ -187,7 +188,18 @@ class GroupInviteViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def perform_create(self, serializer):
-        invite = serializer.save(inviter=self.request.user)
+        email = serializer.validated_data.get('email')
+        existing = GroupInvite.objects.filter(
+            group=serializer.validated_data['group'], email=email, status=GroupInvite.PENDING).first() if email else None
+        if existing is not None:
+            # Inviting the same address again re-sends the email with the same link and restarts the expiry clock.
+            existing.inviter = self.request.user
+            existing.invitee = serializer.validated_data.get('invitee') or existing.invitee
+            existing.created_at = timezone.now()
+            existing.save()
+            serializer.instance = invite = existing
+        else:
+            invite = serializer.save(inviter=self.request.user)
         log_activity(self.request.user, 'invited', 'member', invite.pk, group=invite.group,
                      member=invite.invitee.username if invite.invitee else invite.email)
         if invite.email:
