@@ -107,7 +107,13 @@ class ExpenseSerializer(serializers.ModelSerializer):
         member_ids = set(UserGroup.objects.filter(group_id=group).values_list('user_id', flat=True))
         details = attrs.get('split_details', [])
         for field in ('paid_by', 'split_on'):
-            default_participants = [item['user_id'] for item in details] if field == 'split_on' and details else getattr(self.instance, field, None)
+            role = ExpenseParticipant.PAID if field == 'paid_by' else ExpenseParticipant.SPLIT
+            if field == 'split_on' and details:
+                default_participants = [item['user_id'] for item in details]
+            elif self.instance:
+                default_participants = [p.user_id for p in self.instance.participants.all() if p.role == role]
+            else:
+                default_participants = None
             participants = attrs.get(field, default_participants) or []
             if not participants:
                 raise serializers.ValidationError({field: 'At least one participant is required.'})

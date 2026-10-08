@@ -11,7 +11,10 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         request = self.context['request']
-        expense = attrs['expense']
+        expense = attrs.get('expense', getattr(self.instance, 'expense', None))
+        attrs.setdefault('payer', getattr(self.instance, 'payer', None))
+        attrs.setdefault('payee', getattr(self.instance, 'payee', None))
+        attrs.setdefault('amount', getattr(self.instance, 'amount', None))
         if not UserGroup.objects.filter(user_id=request.user, group_id=expense.group_id).exists():
             raise serializers.ValidationError({'expense': 'You are not a member of this group.'})
         if attrs['payer'] == attrs['payee']:
