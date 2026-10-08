@@ -91,11 +91,12 @@ class Command(BaseCommand):
                         ExpenseParticipant.objects.create(expense=expense, user=member, role=ExpenseParticipant.SPLIT, share_amount=share)
                     Activity.objects.create(actor=payer, action='created', entity_type='expense', entity_id=expense.pk)
 
-                payee = splitters[1]
-                Payment.objects.get_or_create(
-                    group=group, expense=expense, payer=payee, payee=payer,
-                    defaults={'amount': (amount / len(splitters)).quantize(Decimal('0.01'))},
-                )
+                debtor = next((m for m in splitters if m != payer), None)
+                if debtor is not None:  # a person never pays themselves
+                    Payment.objects.get_or_create(
+                        group=group, expense=expense, payer=debtor, payee=payer,
+                        defaults={'amount': (amount / len(splitters)).quantize(Decimal('0.01'))},
+                    )
 
             invitee = users[(GROUPS[group_name][0] + 13) % len(users)]
             if invitee not in members:
