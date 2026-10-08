@@ -92,3 +92,20 @@ class PaymentApiTests(APITestCase):
         self.assertEqual(self.client.post(f'/payments/{payment_id}/confirm/').status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(self.client.patch(f'/payments/{payment_id}/', {'amount': '1.00'}, format='json').status_code,
                          status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    # --- payment cap ---
+    def test_cannot_pay_more_than_owed(self):
+        response = self.pay(amount='50.01')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('amount', response.data)
+
+    def test_pending_payments_count_against_the_cap(self):
+        self.assertEqual(self.pay(amount='30.00').status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.pay(amount='20.01').status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.pay(amount='20.00').status_code, status.HTTP_201_CREATED)
+
+    def test_cannot_pay_someone_you_do_not_owe(self):
+        self.client.force_authenticate(self.alice)  # alice is owed, she owes bob nothing
+        response = self.client.post('/payments/', {
+            'group': self.group.pk, 'payee': self.bob.pk, 'amount': '1.00'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

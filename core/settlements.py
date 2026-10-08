@@ -9,7 +9,8 @@ def get_username(uid):
     return user.username if user else f"User {uid}"
 
 
-def get_settlements_for_group(expenses, user_id, payments=()):
+def net_balances(expenses, user_id, payments=()):
+    """Per other member: positive = they owe `user_id`, negative = `user_id` owes them."""
     balance = defaultdict(Decimal)
 
     for expense in expenses:
@@ -52,6 +53,11 @@ def get_settlements_for_group(expenses, user_id, payments=()):
         elif payment['payee'] == user_id:
             balance[payment['payer']] -= amount
 
+    return balance
+
+
+def get_settlements_for_group(expenses, user_id, payments=()):
+    balance = net_balances(expenses, user_id, payments)
     response = {
         "You need to pay": [],
         "you will get": []
@@ -73,3 +79,28 @@ def get_settlements_for_group(expenses, user_id, payments=()):
             })
 
     return response
+
+
+def group_expense_data(group_id):
+    """Expenses of a group in the shape the settlement maths expects."""
+    from core.models import Expense, ExpenseParticipant
+
+    data = []
+    for expense in Expense.objects.filter(group_id=group_id).prefetch_related('participants'):
+        participants = expense.participants.all()
+        data.append({
+            'amount': expense.amount,
+            'paid_by': [p.user_id for p in participants if p.role == ExpenseParticipant.PAID],
+            'split_on': [p.user_id for p in participants if p.role == ExpenseParticipant.SPLIT],
+            'split_details': [p for p in participants if p.role == ExpenseParticipant.SPLIT],
+        })
+    return data
+
+
+def payment_rows(group_id, statuses):
+    from core.models import Payment
+
+    return [
+        {'payer': p.payer_id, 'payee': p.payee_id, 'amount': p.amount}
+        for p in Payment.objects.filter(group_id=group_id, status__in=statuses)
+    ]

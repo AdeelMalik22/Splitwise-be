@@ -12,7 +12,7 @@ from core.notification_serializers import NotificationSerializer
 from core.activity_serializers import ActivitySerializer
 from django.utils import timezone
 from core.serializers import GroupSerializer, UserGroupSerializer, ExpenseSerializer
-from core.settlements import get_settlements_for_group
+from core.settlements import get_settlements_for_group, group_expense_data, payment_rows
 from user.models import User
 
 
@@ -20,25 +20,52 @@ from user.models import User
 
 
 class GroupViewSet(viewsets.ModelViewSet):
+    """Any member may view and rename a group; only its creator may delete it or remove members."""
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Group.objects.filter(usergroup__user_id=self.request.user.pk)
+        return Group.objects.filter(usergroup__user_id=self.request.user.pk).order_by('id')
 
     def perform_create(self, serializer):
-        group = serializer.save()
+        group = serializer.save(created_by=self.request.user)
         UserGroup.objects.get_or_create(user_id=self.request.user, group_id=group)
         Activity.objects.create(actor=self.request.user, action='created', entity_type='group', entity_id=group.pk)
 
-    @action(detail=True, methods=['delete'],url_name='delete')
-    def delete_group(self,request,pk=None):
-        delete_group = self.get_queryset().filter(pk=pk).first()
-        if not delete_group:
+    @staticmethod
+    def _not_owner(group, user):
+        return Response(
+            {'detail': 'Only the group creator can do that.'}, status=status.HTTP_403_FORBIDDEN,
+        ) if group.created_by_id != user.pk else None
+
+    def destroy(self, request, *args, **kwargs):
+        group = self.get_object()
+        return self._not_owner(group, request.user) or super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=['delete'], url_name='delete')
+    def delete_group(self, request, pk=None):
+        group = self.get_queryset().filter(pk=pk).first()
+        if not group:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
-        delete_group.delete()
-        return Response({"detail": "Group and its associate records have been deleted."},status=status.HTTP_204_NO_CONTENT)
+        denied = self._not_owner(group, request.user)
+        if denied:
+            return denied
+        group.delete()
+        return Response({"detail": "Group and its associate records have been deleted."}, status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['delete'], url_path=r'members/(?P<user_id>\d+)')
+    def remove_member(self, request, pk=None, user_id=None):
+        group = self.get_object()
+        denied = self._not_owner(group, request.user)
+        if denied:
+            return denied
+        if int(user_id) == group.created_by_id:
+            return Response({'detail': 'The creator cannot be removed.'}, status=status.HTTP_400_BAD_REQUEST)
+        removed, _ = UserGroup.objects.filter(group_id=group, user_id=user_id).delete()
+        if not removed:
+            return Response({'detail': 'Not a member of this group.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class UserGroupViewSet(viewsets.ModelViewSet):
@@ -114,23 +141,11 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     def get_settlements(self, request, pk=None):
         if not UserGroup.objects.filter(group_id=pk, user_id=request.user.pk).exists():
             return Response({'detail': 'Not permitted.'}, status=status.HTTP_403_FORBIDDEN)
-        expenses = list(Expense.objects.filter(group_id=pk).prefetch_related('participants'))
-        if not expenses:
+        expense_data = group_expense_data(pk)
+        if not expense_data:
             return Response({"detail": "No expense found for this group."}, status=status.HTTP_404_NOT_FOUND)
-        expense_data = []
-        for expense in expenses:
-            participants = expense.participants.all()
-            expense_data.append({
-                'amount': expense.amount,
-                'paid_by': [p.user_id for p in participants if p.role == ExpenseParticipant.PAID],
-                'split_on': [p.user_id for p in participants if p.role == ExpenseParticipant.SPLIT],
-                'split_details': [p for p in participants if p.role == ExpenseParticipant.SPLIT],
-            })
-        payments = [
-            {'payer': p.payer_id, 'payee': p.payee_id, 'amount': p.amount}
-            for p in Payment.objects.filter(group_id=pk, status=Payment.COMPLETED)
-        ]
-        settlements = get_settlements_for_group(expense_data, request.user.id, payments)
+        settlements = get_settlements_for_group(
+            expense_data, request.user.id, payment_rows(pk, [Payment.COMPLETED]))
         return Response(settlements,status.HTTP_200_OK)
 
 

@@ -39,7 +39,7 @@ class GroupOwnershipTests(SimpleTestCase):
     @patch('core.views.Activity.objects.create')
     def test_group_creation_adds_creator_to_group(self, create_activity, get_or_create):
         group = type('Group', (), {'pk': 1})()
-        serializer = type('Serializer', (), {'save': lambda self: group})()
+        serializer = type('Serializer', (), {'save': lambda self, **kwargs: group})()
         view = GroupViewSet()
         view.request = type('Request', (), {'user': 'user'})()
 

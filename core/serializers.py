@@ -9,7 +9,8 @@ from core.models import Group, UserGroup, Expense, ExpenseParticipant
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
-        fields = '__all__'
+        fields = ('id', 'name', 'description', 'icon', 'created_by', 'created', 'updated')
+        read_only_fields = ('id', 'created_by', 'created', 'updated')
 
 class UserGroupSerializer(serializers.ModelSerializer):
     class Meta:

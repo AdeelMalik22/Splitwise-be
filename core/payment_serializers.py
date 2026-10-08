@@ -1,6 +1,9 @@
 from rest_framework import serializers
 
+from decimal import Decimal
+
 from core.models import Payment, UserGroup
+from core.settlements import group_expense_data, net_balances, payment_rows
 
 
 class PaymentSerializer(serializers.ModelSerializer):
@@ -30,4 +33,14 @@ class PaymentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'expense': 'The expense must belong to the group.'})
         if attrs['amount'] <= 0:
             raise serializers.ValidationError({'amount': 'Amount must be greater than zero.'})
+        owed = self._owed(request.user, payee, group)
+        if attrs['amount'] > owed:
+            raise serializers.ValidationError({'amount': f'You only owe {payee.username} Rs {owed} in this group.'})
         return attrs
+
+    @staticmethod
+    def _owed(payer, payee, group):
+        """What `payer` still owes `payee`, counting confirmed payments and payments awaiting confirmation."""
+        payments = payment_rows(group.pk, [Payment.COMPLETED, Payment.PENDING])
+        balance = net_balances(group_expense_data(group.pk), payer.pk, payments)
+        return max(-balance.get(payee.pk, Decimal('0')), Decimal('0')).quantize(Decimal('0.01'))
