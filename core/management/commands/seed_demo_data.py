@@ -93,7 +93,7 @@ class Command(BaseCommand):
 
                 payee = splitters[1]
                 Payment.objects.get_or_create(
-                    expense=expense, payer=payee, payee=payer,
+                    group=group, expense=expense, payer=payee, payee=payer,
                     defaults={'amount': (amount / len(splitters)).quantize(Decimal('0.01'))},
                 )
 

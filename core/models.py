@@ -74,7 +74,9 @@ class Payment(models.Model):
     COMPLETED = 'completed'
     STATUS_CHOICES = ((PENDING, 'Pending'), (COMPLETED, 'Completed'))
 
-    expense = models.ForeignKey(Expense, on_delete=models.CASCADE, related_name='payments')
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='payments')
+    # Optional: a payment settles a balance between two members, not necessarily one expense.
+    expense = models.ForeignKey(Expense, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments')
     payer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments_made')
     payee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments_received')
     amount = models.DecimalField(max_digits=12, decimal_places=2)

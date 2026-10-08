@@ -1,7 +1,7 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from core.models import Group, UserGroup, Expense, ExpenseParticipant, Payment
+from core.models import Group, UserGroup, Expense, ExpenseParticipant
 from user.models import User
 
 
@@ -25,11 +25,3 @@ class PartialUpdateTests(APITestCase):
         self.assertEqual(response.data['name'], 'Lunch')
         self.assertEqual(response.data['paid_by'], [self.owner.pk])
         self.assertEqual(len(response.data['split_on']), 2)
-
-    def test_patch_payment_amount(self):
-        payment = Payment.objects.create(expense=self.expense, payer=self.member, payee=self.owner,
-                                         amount='10.00')
-        response = self.client.patch(f'/payments/{payment.pk}/', {'amount': '20.00'}, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        payment.refresh_from_db()
-        self.assertEqual(str(payment.amount), '20.00')

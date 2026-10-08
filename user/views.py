@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from core.models import UserGroup, Group
 from user.models import User, GroupInvite
 from user.invite_serializers import UserSearchSerializer, GroupInviteSerializer
-from user.serializers import UserSerializer
+from user.serializers import ChangePasswordSerializer, DeleteAccountSerializer, UserSerializer
 
 from .serializers import MyTokenObtainPairSerializer
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -46,6 +46,21 @@ class UserVietSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         return Response(self.get_serializer(user).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], url_path='change_password')
+    def change_password(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        request.user.set_password(serializer.validated_data['new_password'])
+        request.user.save(update_fields=('password',))
+        return Response({'detail': 'Password updated.'})
+
+    @action(detail=False, methods=['post'], url_path='delete_account')
+    def delete_account(self, request):
+        serializer = DeleteAccountSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        request.user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['get'], url_path="groups")
     def get_group_users(self, request, pk=None):

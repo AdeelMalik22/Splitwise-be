@@ -9,7 +9,7 @@ def get_username(uid):
     return user.username if user else f"User {uid}"
 
 
-def get_settlements_for_group(expenses, user_id):
+def get_settlements_for_group(expenses, user_id, payments=()):
     balance = defaultdict(Decimal)
 
     for expense in expenses:
@@ -43,6 +43,14 @@ def get_settlements_for_group(expenses, user_id):
                     balance[payer] -= split_amount  # user owes others
                 elif payer == user_id:
                     balance[splitter] += split_amount  # others owe user
+
+    # Confirmed payments settle debts: they move the balance back towards zero.
+    for payment in payments:
+        amount = Decimal(str(payment['amount']))
+        if payment['payer'] == user_id:
+            balance[payment['payee']] += amount
+        elif payment['payee'] == user_id:
+            balance[payment['payer']] -= amount
 
     response = {
         "You need to pay": [],

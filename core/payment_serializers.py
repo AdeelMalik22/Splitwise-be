@@ -1,27 +1,33 @@
 from rest_framework import serializers
 
-from core.models import Expense, Payment, UserGroup
+from core.models import Payment, UserGroup
 
 
 class PaymentSerializer(serializers.ModelSerializer):
+    group_name = serializers.CharField(source='group.name', read_only=True)
+    payer_username = serializers.CharField(source='payer.username', read_only=True)
+    payee_username = serializers.CharField(source='payee.username', read_only=True)
+
     class Meta:
         model = Payment
-        fields = ('id', 'expense', 'payer', 'payee', 'amount', 'status', 'created_at', 'completed_at')
-        read_only_fields = ('id', 'status', 'created_at', 'completed_at')
+        fields = ('id', 'group', 'group_name', 'expense', 'payer', 'payer_username',
+                  'payee', 'payee_username', 'amount', 'status', 'created_at', 'completed_at')
+        # The payer is always the signed-in user; status changes only through /confirm/.
+        read_only_fields = ('id', 'payer', 'status', 'created_at', 'completed_at')
 
     def validate(self, attrs):
         request = self.context['request']
-        expense = attrs.get('expense', getattr(self.instance, 'expense', None))
-        attrs.setdefault('payer', getattr(self.instance, 'payer', None))
-        attrs.setdefault('payee', getattr(self.instance, 'payee', None))
-        attrs.setdefault('amount', getattr(self.instance, 'amount', None))
-        if not UserGroup.objects.filter(user_id=request.user, group_id=expense.group_id).exists():
-            raise serializers.ValidationError({'expense': 'You are not a member of this group.'})
-        if attrs['payer'] == attrs['payee']:
-            raise serializers.ValidationError('Payer and payee must be different users.')
-        member_ids = set(UserGroup.objects.filter(group_id=expense.group_id).values_list('user_id', flat=True))
-        if attrs['payer'].pk not in member_ids or attrs['payee'].pk not in member_ids:
-            raise serializers.ValidationError('Payer and payee must belong to the expense group.')
-        if attrs['amount'] <= 0 or attrs['amount'] > expense.amount:
-            raise serializers.ValidationError({'amount': 'Amount must be positive and no greater than the expense amount.'})
+        group = attrs['group']
+        payee = attrs['payee']
+        if not UserGroup.objects.filter(user_id=request.user, group_id=group).exists():
+            raise serializers.ValidationError({'group': 'You are not a member of this group.'})
+        if payee == request.user:
+            raise serializers.ValidationError({'payee': 'You cannot pay yourself.'})
+        if not UserGroup.objects.filter(user_id=payee, group_id=group).exists():
+            raise serializers.ValidationError({'payee': 'The payee must belong to the group.'})
+        expense = attrs.get('expense')
+        if expense is not None and expense.group_id_id != group.pk:
+            raise serializers.ValidationError({'expense': 'The expense must belong to the group.'})
+        if attrs['amount'] <= 0:
+            raise serializers.ValidationError({'amount': 'Amount must be greater than zero.'})
         return attrs

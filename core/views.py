@@ -1,4 +1,5 @@
 from django.core.cache import cache
+from django.db.models import Q
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -125,28 +126,58 @@ class ExpenseViewSet(viewsets.ModelViewSet):
                 'split_on': [p.user_id for p in participants if p.role == ExpenseParticipant.SPLIT],
                 'split_details': [p for p in participants if p.role == ExpenseParticipant.SPLIT],
             })
-        settlements = get_settlements_for_group(expense_data, request.user.id)
+        payments = [
+            {'payer': p.payer_id, 'payee': p.payee_id, 'amount': p.amount}
+            for p in Payment.objects.filter(group_id=pk, status=Payment.COMPLETED)
+        ]
+        settlements = get_settlements_for_group(expense_data, request.user.id, payments)
         return Response(settlements,status.HTTP_200_OK)
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
+    """Payments between two group members.
+
+    The payer records a payment (pending); the payee confirms receipt, and only
+    confirmed payments reduce balances. The payer may cancel while it is pending.
+    """
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post', 'delete', 'head', 'options']
 
     def get_queryset(self):
-        return Payment.objects.filter(
-            expense__group_id__usergroup__user_id=self.request.user.pk
-        ).select_related('expense', 'payer', 'payee')
+        user = self.request.user
+        return Payment.objects.filter(Q(payer=user) | Q(payee=user)).select_related('group', 'payer', 'payee')
 
     def perform_create(self, serializer):
-        payment = serializer.save()
+        payment = serializer.save(payer=self.request.user)
+        Notification.objects.create(
+            recipient=payment.payee, notification_type='payment',
+            message=f'{payment.payer.username} says they paid you Rs {payment.amount} in {payment.group.name}. Confirm when received.',
+        )
         Activity.objects.create(actor=self.request.user, action='created', entity_type='payment', entity_id=payment.pk)
 
-    def perform_update(self, serializer):
-        payment = serializer.save()
-        if payment.status == Payment.COMPLETED and payment.completed_at is None:
+    def destroy(self, request, *args, **kwargs):
+        payment = self.get_object()
+        if payment.payer_id != request.user.pk:
+            return Response({'detail': 'Only the payer can cancel a payment.'}, status=status.HTTP_403_FORBIDDEN)
+        if payment.status != Payment.PENDING:
+            return Response({'detail': 'Completed payments cannot be cancelled.'}, status=status.HTTP_400_BAD_REQUEST)
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'])
+    def confirm(self, request, pk=None):
+        payment = self.get_object()
+        if payment.payee_id != request.user.pk:
+            return Response({'detail': 'Only the payee can confirm a payment.'}, status=status.HTTP_403_FORBIDDEN)
+        if payment.status == Payment.PENDING:
+            payment.status = Payment.COMPLETED
             payment.completed_at = timezone.now()
-            payment.save(update_fields=('completed_at',))
+            payment.save(update_fields=('status', 'completed_at'))
+            Notification.objects.create(
+                recipient=payment.payer, notification_type='payment',
+                message=f'{payment.payee.username} confirmed your Rs {payment.amount} payment in {payment.group.name}.',
+            )
+        return Response(self.get_serializer(payment).data)
 
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
