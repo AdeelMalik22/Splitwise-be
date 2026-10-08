@@ -19,3 +19,17 @@
 
 Do not commit real environment files, credentials, or generated static/media
 files.
+
+## Free hosting (Render + Neon)
+
+1. Create a free PostgreSQL project on neon.tech and copy its connection string.
+2. On render.com choose New → Blueprint, select this repository (`render.yaml`
+   is picked up automatically) and paste the Neon string into `DATABASE_URL`.
+3. Redis is not required: without `REDIS_URL` the cache uses a database table
+   created by `build.sh` (`createcachetable`).
+4. After the first deploy open `https://<service>.onrender.com/health/` and
+   confirm both checks are true. Optionally seed demo users from the Render
+   shell with `python manage.py seed_demo_data`.
+
+The free web service sleeps after ~15 minutes idle; the first request after
+that takes up to a minute to wake it.

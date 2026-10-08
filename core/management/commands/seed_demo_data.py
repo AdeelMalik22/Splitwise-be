@@ -8,7 +8,7 @@ from core.models import Activity, Expense, ExpenseParticipant, Group, Notificati
 from user.models import GroupInvite, User
 
 
-PASSWORD = 'SplitwiseDemo!2026'
+PASSWORD = 'caSplitwiseDemo!2026'
 USERS = [
     ('umer', 'Umer Farooq', 'umer@example.com'),
     ('adeel', 'Adeel Malik', 'adeel@example.com'),

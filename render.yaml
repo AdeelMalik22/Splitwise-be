@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: splitwise-api
+    runtime: python
+    plan: free
+    buildCommand: ./build.sh
+    startCommand: gunicorn splitwise.wsgi:application --workers 2 --timeout 60
+    healthCheckPath: /health/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false # paste the Neon connection string in the Render dashboard

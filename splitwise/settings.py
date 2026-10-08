@@ -33,6 +33,9 @@ if not DEBUG and SECRET_KEY == 'dev-only-insecure-key-change-me':
 ALLOWED_HOSTS = [host.strip() for host in os.getenv(
     'DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1'
 ).split(',') if host.strip()]
+# Render injects the service's public hostname.
+if os.getenv('RENDER_EXTERNAL_HOSTNAME'):
+    ALLOWED_HOSTS.append(os.environ['RENDER_EXTERNAL_HOSTNAME'])
 
 
 # Application definition
@@ -89,6 +92,10 @@ WSGI_APPLICATION = 'splitwise.wsgi.application'
 
 if os.getenv('DJANGO_TEST', '').lower() == 'true':
     DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
+elif os.getenv('DATABASE_URL'):
+    from splitwise.dbconfig import database_from_url
+    DATABASES = {'default': database_from_url(
+        os.environ['DATABASE_URL'], int(os.getenv('POSTGRES_CONN_MAX_AGE', '60')))}
 else:
     DATABASES = {
         'default': {
@@ -174,6 +181,15 @@ if DEBUG and not os.getenv('REDIS_URL'):
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
             'LOCATION': 'splitwise-local-cache',
+        }
+    }
+elif not os.getenv('REDIS_URL'):
+    # No Redis available (e.g. free hosting): share the cache through the database
+    # so every worker sees the same data. Create the table with `manage.py createcachetable`.
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'django_cache',
         }
     }
 else:
