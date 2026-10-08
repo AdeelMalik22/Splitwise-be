@@ -6,6 +6,7 @@ djangorestframework-simplejwt==5.5.1
 django-cors-headers==4.7.0
 django-redis==5.4.0
 redis==6.2.0
+async-timeout>=4.0.3  # needed by redis on Python < 3.11.3 (explicit so odd interpreters still work)
 psycopg2-binary==2.9.10
 gunicorn==23.0.0
 Pillow==11.3.0
