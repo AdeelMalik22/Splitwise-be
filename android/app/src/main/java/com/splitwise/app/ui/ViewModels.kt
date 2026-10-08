@@ -53,31 +53,87 @@ class AuthViewModel(private val repo: Repository) : ViewModel() {
 class SessionViewModel(private val repo: Repository) : ViewModel() {
     val loggedIn = repo.loggedIn
     val userId = repo.userId
-    fun logout() = viewModelScope.launch { repo.logout() }
+    val darkMode = repo.darkMode
+    fun setDarkMode(dark: Boolean) { viewModelScope.launch { repo.setDarkMode(dark) } }
+    fun logout() { viewModelScope.launch { repo.logout() } }
 }
 
-class GroupsViewModel(private val repo: Repository) : ViewModel() {
-    private val _groups = MutableStateFlow<Load<List<Group>>>(Load.Loading)
-    val groups: StateFlow<Load<List<Group>>> = _groups.asStateFlow()
-    private val _actionError = MutableStateFlow<String?>(null)
-    val actionError: StateFlow<String?> = _actionError.asStateFlow()
+/** Everything the signed-in tabs share, loaded together. */
+data class Overview(
+    val me: Profile?,
+    val groups: List<Group>,
+    val balances: Map<Int, Settlements>,
+    val members: Map<Int, List<Member>>,
+    val invites: List<Invite>,
+    val notifications: List<AppNotification>,
+    val activity: List<ActivityItem>,
+) {
+    fun owe(): BigDecimal = balances.values.flatMap { it.youOwe }.fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
+    fun owed(): BigDecimal = balances.values.flatMap { it.owedToYou }.fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
+    fun net(groupId: Int): BigDecimal {
+        val s = balances[groupId] ?: return BigDecimal.ZERO
+        return s.owedToYou.fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() } -
+            s.youOwe.fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
+    }
+    fun pendingFor(userId: Int?) = invites.filter { it.status == "pending" && it.invitee == userId }
+}
+
+class OverviewViewModel(private val repo: Repository) : ViewModel() {
+    private val _state = MutableStateFlow<Load<Overview>>(Load.Loading)
+    val state: StateFlow<Load<Overview>> = _state.asStateFlow()
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
 
     init { refresh() }
 
-    fun refresh() {
-        viewModelScope.launch { _groups.value = repo.groups().toLoad() }
-    }
-
-    fun create(name: String, description: String, onDone: () -> Unit) {
+    /** [silent] keeps what is on screen while reloading and after a transient failure. */
+    fun refresh(silent: Boolean = false) {
         viewModelScope.launch {
-            repo.createGroup(name, description).fold(
-                { refresh(); onDone() },
-                { _actionError.value = it.userMessage() },
+            if (!silent && _state.value !is Load.Ready) _state.value = Load.Loading
+            val groupsResult = repo.groups()
+            val groups = groupsResult.getOrElse {
+                if (!(silent && _state.value is Load.Ready)) _state.value = Load.Error(it.userMessage())
+                return@launch
+            }
+            val me = async { repo.profile().getOrNull() }
+            val balances = async { repo.balances(groups) }
+            val members = groups.map { g -> g.id to async { repo.members(g.id).getOrDefault(emptyList()) } }
+            val invites = async { repo.invites().getOrDefault(emptyList()) }
+            val notifications = async { repo.notifications().getOrDefault(emptyList()) }
+            val activity = async { repo.activity().getOrDefault(emptyList()) }
+            _state.value = Load.Ready(
+                Overview(
+                    me = me.await(), groups = groups, balances = balances.await(),
+                    members = members.associate { (id, d) -> id to d.await() },
+                    invites = invites.await(), notifications = notifications.await(), activity = activity.await(),
+                )
             )
         }
     }
 
-    fun dismissError() { _actionError.value = null }
+    fun createGroup(name: String, description: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            repo.createGroup(name, description).fold(
+                { refresh(silent = true); onDone() },
+                { _message.value = it.userMessage() },
+            )
+        }
+    }
+
+    fun respond(invite: Invite, accept: Boolean) {
+        viewModelScope.launch {
+            repo.respondToInvite(invite.id, accept).fold(
+                { refresh(silent = true) },
+                { _message.value = it.userMessage() },
+            )
+        }
+    }
+
+    fun markRead(n: AppNotification) {
+        viewModelScope.launch { repo.markRead(n.id).onSuccess { refresh(silent = true) } }
+    }
+
+    fun messageShown() { _message.value = null }
 }
 
 class GroupDetailViewModel(private val repo: Repository, private val groupId: Int) : ViewModel() {
@@ -129,8 +185,9 @@ class GroupDetailViewModel(private val repo: Repository, private val groupId: In
     fun messageShown() = _state.update { it.copy(message = null) }
 }
 
-class AddExpenseViewModel(private val repo: Repository, private val groupId: Int) : ViewModel() {
+class AddExpenseViewModel(private val repo: Repository) : ViewModel() {
     data class State(
+        val groupId: Int? = null,
         val members: Load<List<Member>> = Load.Loading,
         val busy: Boolean = false,
         val error: String? = null,
@@ -140,14 +197,21 @@ class AddExpenseViewModel(private val repo: Repository, private val groupId: Int
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
-    init {
-        viewModelScope.launch { _state.update { it.copy(members = repo.members(groupId).toLoad()) } }
+    fun selectGroup(groupId: Int) {
+        if (_state.value.groupId == groupId) return
+        _state.update { it.copy(groupId = groupId, members = Load.Loading) }
+        viewModelScope.launch {
+            val result = repo.members(groupId).toLoad()
+            _state.update { if (it.groupId == groupId) it.copy(members = result) else it }
+        }
     }
 
     fun save(name: String, description: String, amountText: String, paidBy: Int?, splitOn: Set<Int>) {
         val amount = amountText.trim().toBigDecimalOrNull()
+        val groupId = _state.value.groupId
         val error = when {
-            name.isBlank() -> "Enter a name."
+            groupId == null -> "Choose a group."
+            name.isBlank() -> "Enter an expense name."
             amount == null || amount <= BigDecimal.ZERO -> "Enter an amount greater than zero."
             paidBy == null -> "Choose who paid."
             splitOn.isEmpty() -> "Choose at least one person to split with."
@@ -159,7 +223,7 @@ class AddExpenseViewModel(private val repo: Repository, private val groupId: Int
         viewModelScope.launch {
             val result = repo.createExpense(
                 ExpenseRequest(name.trim(), description.trim(), amount!!.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString(),
-                    listOf(paidBy!!), splitOn.toList(), groupId)
+                    listOf(paidBy!!), splitOn.toList(), groupId!!)
             )
             _state.update { s ->
                 result.fold({ s.copy(busy = false, saved = true) }, { s.copy(busy = false, error = it.userMessage()) })
@@ -168,37 +232,29 @@ class AddExpenseViewModel(private val repo: Repository, private val groupId: Int
     }
 }
 
-class InboxViewModel(private val repo: Repository) : ViewModel() {
-    data class State(
-        val invites: Load<List<Invite>> = Load.Loading,
-        val notifications: Load<List<AppNotification>> = Load.Loading,
-        val message: String? = null,
-    )
+class InviteSearchViewModel(private val repo: Repository) : ViewModel() {
+    data class State(val results: List<UserSummary> = emptyList(), val searched: Boolean = false, val message: String? = null)
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
-    init { refresh() }
-
-    fun refresh() {
+    fun search(query: String) {
+        if (query.trim().length < 2) return _state.update { it.copy(results = emptyList(), searched = false) }
         viewModelScope.launch {
-            val i = async { repo.invites() }
-            val n = async { repo.notifications() }
-            _state.update { it.copy(invites = i.await().toLoad(), notifications = n.await().toLoad()) }
-        }
-    }
-
-    fun respond(invite: Invite, accept: Boolean) {
-        viewModelScope.launch {
-            repo.respondToInvite(invite.id, accept).fold(
-                { refresh() },
+            repo.searchUsers(query).fold(
+                { found -> _state.update { it.copy(results = found, searched = true) } },
                 { err -> _state.update { it.copy(message = err.userMessage()) } },
             )
         }
     }
 
-    fun markRead(n: AppNotification) {
-        viewModelScope.launch { repo.markRead(n.id).onSuccess { refresh() } }
+    fun invite(groupId: Int, user: UserSummary, onSent: () -> Unit) {
+        viewModelScope.launch {
+            repo.invite(groupId, user.id).fold(
+                { _state.update { it.copy(message = "Invite sent to ${user.username}.") }; onSent() },
+                { err -> _state.update { it.copy(message = err.userMessage()) } },
+            )
+        }
     }
 
     fun messageShown() = _state.update { it.copy(message = null) }

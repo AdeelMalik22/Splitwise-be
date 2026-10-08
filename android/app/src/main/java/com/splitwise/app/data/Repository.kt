@@ -1,6 +1,9 @@
 package com.splitwise.app.data
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -47,6 +50,8 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
 
     val loggedIn: Flow<Boolean> = tokens.loggedIn
     val userId: Flow<Int?> = tokens.userId
+    val darkMode: Flow<Boolean?> = tokens.darkMode
+    suspend fun setDarkMode(dark: Boolean) = tokens.setDarkMode(dark)
 
     suspend fun login(username: String, password: String) = call {
         val pair = clients.auth.login(LoginRequest(username.trim(), password))
@@ -86,6 +91,25 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     suspend fun invites() = call { api.invites().results }
     suspend fun respondToInvite(id: Int, accept: Boolean) = call {
         if (accept) api.acceptInvite(id) else api.declineInvite(id)
+    }
+
+    suspend fun profile() = call { api.profile().results.first() }
+    suspend fun activity() = call { api.activity().results }
+
+    /** Settlements for every group at once; groups whose request fails are left out. */
+    suspend fun balances(groups: List<Group>): Map<Int, Settlements> = coroutineScope {
+        groups.map { g -> async { g.id to api.runCatchingSettlements(g.id) } }.awaitAll()
+            .mapNotNull { (id, r) -> r?.let { id to it } }.toMap()
+    }
+
+    private suspend fun SplitwiseApi.runCatchingSettlements(id: Int): Settlements? = try {
+        settlements(id)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: HttpException) {
+        if (e.code() == 404) Settlements() else null
+    } catch (e: Exception) {
+        null
     }
 
     suspend fun notifications() = call { api.notifications().results }

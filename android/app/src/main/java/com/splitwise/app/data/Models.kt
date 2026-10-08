@@ -18,6 +18,13 @@ object MoneySerializer : KSerializer<String> {
     override fun serialize(encoder: Encoder, value: String) = encoder.encodeString(value)
 }
 
+object NullableMoneySerializer : KSerializer<String?> {
+    override val descriptor = PrimitiveSerialDescriptor("NullableMoney", PrimitiveKind.STRING)
+    override fun deserialize(decoder: Decoder): String? =
+        ((decoder as JsonDecoder).decodeJsonElement() as? JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
+    override fun serialize(encoder: Encoder, value: String?) = encoder.encodeString(value.orEmpty())
+}
+
 @Serializable data class Page<T>(val results: List<T> = emptyList())
 
 @Serializable data class LoginRequest(val username: String, val password: String)
@@ -35,6 +42,13 @@ data class RegisterRequest(val username: String, val name: String, val email: St
 @Serializable data class UserSummary(val id: Int, val username: String, val name: String = "")
 
 @Serializable
+data class SplitDetail(
+    @SerialName("user_id") val userId: Int,
+    @Serializable(with = NullableMoneySerializer::class) val amount: String? = null,
+    @Serializable(with = NullableMoneySerializer::class) val percentage: String? = null,
+)
+
+@Serializable
 data class Expense(
     val id: Int,
     val name: String,
@@ -42,6 +56,7 @@ data class Expense(
     @Serializable(with = MoneySerializer::class) val amount: String,
     @SerialName("paid_by") val paidBy: List<Int> = emptyList(),
     @SerialName("split_on") val splitOn: List<Int> = emptyList(),
+    @SerialName("split_details") val splitDetails: List<SplitDetail> = emptyList(),
     @SerialName("group_id") val groupId: Int,
     @SerialName("created_at") val createdAt: String = "",
 )
@@ -73,8 +88,12 @@ data class Settlements(
 data class Invite(
     val id: Int,
     val group: Int,
+    @SerialName("group_name") val groupName: String = "",
     val inviter: Int,
+    @SerialName("inviter_username") val inviterUsername: String = "",
+    @SerialName("inviter_name") val inviterName: String = "",
     val invitee: Int,
+    @SerialName("invitee_username") val inviteeUsername: String = "",
     val status: String,
 )
 
@@ -86,4 +105,15 @@ data class AppNotification(
     val message: String,
     @SerialName("created_at") val createdAt: String = "",
     @SerialName("read_at") val readAt: String? = null,
+)
+
+@Serializable data class Profile(val id: Int, val username: String, val name: String = "", val email: String = "")
+
+@Serializable
+data class ActivityItem(
+    val id: Int,
+    val action: String,
+    @SerialName("entity_type") val entityType: String,
+    @SerialName("entity_id") val entityId: Int? = null,
+    @SerialName("created_at") val createdAt: String = "",
 )

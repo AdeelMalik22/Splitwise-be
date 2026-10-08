@@ -2,6 +2,7 @@ package com.splitwise.app.data
 
 import android.content.Context
 import android.util.Base64
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -24,6 +25,11 @@ class TokenStore(private val context: Context) {
     private val userIdKey = intPreferencesKey("user_id")
 
     /** null until the first read completes is avoided: this emits the stored state immediately. */
+    private val darkKey = booleanPreferencesKey("dark_mode")
+    /** null = follow the system theme. Survives sign-out (it's a device setting). */
+    val darkMode: Flow<Boolean?> = context.dataStore.data.map { it[darkKey] }
+    suspend fun setDarkMode(dark: Boolean) { context.dataStore.edit { it[darkKey] = dark } }
+
     val loggedIn: Flow<Boolean> = context.dataStore.data.map { it[accessKey] != null }
     val userId: Flow<Int?> = context.dataStore.data.map { it[userIdKey] }
 
@@ -42,7 +48,9 @@ class TokenStore(private val context: Context) {
     fun saveBlocking(access: String, refresh: String?) = runBlocking { save(access, refresh) }
 
     suspend fun clear() {
-        context.dataStore.edit { it.clear() }
+        context.dataStore.edit { prefs ->
+            prefs.remove(accessKey); prefs.remove(refreshKey); prefs.remove(userIdKey)
+        }
     }
 
     fun clearBlocking() = runBlocking { clear() }

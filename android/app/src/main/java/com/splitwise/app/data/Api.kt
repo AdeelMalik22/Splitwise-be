@@ -31,6 +31,9 @@ interface SplitwiseApi {
     @POST("invites/{id}/accept/") suspend fun acceptInvite(@Path("id") id: Int): Invite
     @POST("invites/{id}/decline/") suspend fun declineInvite(@Path("id") id: Int): Invite
 
+    @GET("users/") suspend fun profile(): Page<Profile>
+    @GET("activity/") suspend fun activity(): Page<ActivityItem>
+
     @GET("notifications/") suspend fun notifications(): Page<AppNotification>
     @POST("notifications/{id}/mark_read/") suspend fun markRead(@Path("id") id: Int): AppNotification
 }
