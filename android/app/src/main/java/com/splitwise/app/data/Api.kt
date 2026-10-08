@@ -18,12 +18,17 @@ interface AuthApi {
 interface SplitwiseApi {
     @GET("groups/") suspend fun groups(): Page<Group>
     @POST("groups/") suspend fun createGroup(@Body body: GroupRequest): Group
+    @PATCH("groups/{id}/") suspend fun updateGroup(@Path("id") id: Int, @Body body: GroupRequest): Group
+    @DELETE("groups/{id}/") suspend fun deleteGroup(@Path("id") id: Int)
+    @DELETE("groups/{id}/members/{userId}/") suspend fun removeMember(@Path("id") id: Int, @Path("userId") userId: Int)
 
     @GET("usersgroup/{groupId}/users/") suspend fun members(@Path("groupId") groupId: Int): List<Member>
 
     // The list endpoint returns every expense visible to the user as a plain array.
     @GET("expense/") suspend fun expenses(): List<Expense>
     @POST("expense/") suspend fun createExpense(@Body body: ExpenseRequest): Expense
+    @GET("expense/{id}/") suspend fun expense(@Path("id") id: Int): Expense
+    @PATCH("expense/{id}/") suspend fun updateExpense(@Path("id") id: Int, @Body body: ExpenseRequest): Expense
     @GET("expense/{groupId}/settlements/") suspend fun settlements(@Path("groupId") groupId: Int): Settlements
 
     @DELETE("expense/{id}/") suspend fun deleteExpense(@Path("id") id: Int)

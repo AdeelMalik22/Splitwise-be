@@ -134,7 +134,7 @@ fun GroupRow(group: Group, overview: Overview, onClick: () -> Unit) {
     val c = MaterialTheme.split
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(16.dp, 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(c.primaryBg), contentAlignment = Alignment.Center) {
-            Text(emojiFor(group.id), fontSize = 22.sp)
+            Text(group.emoji(), fontSize = 22.sp)
         }
         Column(Modifier.weight(1f)) {
             Text(group.name, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
@@ -222,9 +222,27 @@ fun GroupsScreen(overview: Overview, onOpenGroup: (Group) -> Unit, onNew: () -> 
 }
 
 @Composable
-fun CreateGroupDialog(onDismiss: () -> Unit, onCreate: (String, String) -> Unit) {
+fun IconPicker(selected: String, onSelect: (String) -> Unit) {
+    val c = MaterialTheme.split
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        GroupIcons.forEach { icon ->
+            val on = icon == selected
+            Box(
+                Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(if (on) c.primaryBg else c.input)
+                    .border(if (on) 2.dp else 0.dp, if (on) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(12.dp))
+                    .clickable { onSelect(icon) },
+                contentAlignment = Alignment.Center,
+            ) { Text(icon, fontSize = 22.sp) }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun CreateGroupDialog(onDismiss: () -> Unit, onCreate: (String, String, String) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
+    var icon by rememberSaveable { mutableStateOf(GroupIcons.first()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
@@ -233,9 +251,11 @@ fun CreateGroupDialog(onDismiss: () -> Unit, onCreate: (String, String) -> Unit)
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(name, { name = it }, label = { Text("Group name") }, singleLine = true, shape = RoundedCornerShape(12.dp))
                 OutlinedTextField(description, { description = it }, label = { Text("Description") }, singleLine = true, shape = RoundedCornerShape(12.dp))
+                Text("Icon", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.titleSmall)
+                IconPicker(icon) { icon = it }
             }
         },
-        confirmButton = { TextButton(onClick = { onCreate(name, description) }, enabled = name.isNotBlank()) { Text("Create") } },
+        confirmButton = { TextButton(onClick = { onCreate(name, description, icon) }, enabled = name.isNotBlank()) { Text("Create") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }

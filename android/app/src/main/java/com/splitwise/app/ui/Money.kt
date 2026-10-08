@@ -40,8 +40,11 @@ fun netFor(expense: Expense, userId: Int): BigDecimal {
 
 fun hasSplitMember(expense: Expense, userId: Int) = userId in expense.splitOn || userId in expense.paidBy
 
-private val groupEmoji = listOf("🏔️", "🏠", "🍽️", "✈️", "🎉", "🛒", "🎬", "⚽")
-fun emojiFor(groupId: Int) = groupEmoji[groupId.mod(groupEmoji.size)]
+val GroupIcons = listOf("🏔️", "🏠", "🍽️", "✈️", "🎉", "🛒", "🎬", "⚽", "🏖️", "🚗", "🎓", "💼", "🎮", "☕", "🏕️", "🎁")
+fun emojiFor(groupId: Int) = GroupIcons[groupId.mod(8)]
+
+/** The group's chosen icon, or a stable default derived from its id. */
+fun com.splitwise.app.data.Group.emoji() = icon.ifBlank { emojiFor(id) }
 
 fun initials(name: String, username: String): String {
     val source = name.ifBlank { username }.trim()

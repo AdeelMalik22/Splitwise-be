@@ -35,8 +35,15 @@ object NullableMoneySerializer : KSerializer<String?> {
 @Serializable
 data class RegisterRequest(val username: String, val name: String, val email: String, val password: String)
 
-@Serializable data class Group(val id: Int, val name: String, val description: String = "")
-@Serializable data class GroupRequest(val name: String, val description: String)
+@Serializable
+data class Group(
+    val id: Int,
+    val name: String,
+    val description: String = "",
+    val icon: String = "",
+    @SerialName("created_by") val createdBy: Int? = null,
+)
+@Serializable data class GroupRequest(val name: String, val description: String, val icon: String = "")
 
 @Serializable data class Member(val id: Int, val username: String, val name: String = "")
 @Serializable data class UserSummary(val id: Int, val username: String, val name: String = "")
@@ -61,13 +68,17 @@ data class Expense(
     @SerialName("created_at") val createdAt: String = "",
 )
 
+@Serializable data class SplitShare(@SerialName("user_id") val userId: Int, val amount: String? = null, val percentage: String? = null)
+
+/** Either [splitOn] (equal split) or [splitDetails] (exact amounts / percentages) is sent. */
 @Serializable
 data class ExpenseRequest(
     val name: String,
     val description: String,
     val amount: String,
     @SerialName("paid_by") val paidBy: List<Int>,
-    @SerialName("split_on") val splitOn: List<Int>,
+    @SerialName("split_on") val splitOn: List<Int>? = null,
+    @SerialName("split_details") val splitDetails: List<SplitShare>? = null,
     @SerialName("group_id") val groupId: Int,
 )
 

@@ -31,90 +31,151 @@ import com.splitwise.app.data.Invite
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-// ───────────────────────── Add expense ─────────────────────────
+// ───────────────────────── Add / edit expense ─────────────────────────
 
 @Composable
-fun AddExpenseScreen(vm: AddExpenseViewModel, groups: List<Group>, initialGroupId: Int?, userId: Int?, onBack: () -> Unit) {
+fun AddExpenseScreen(vm: AddExpenseViewModel, groups: List<Group>, initialGroupId: Int?, editExpenseId: Int?, userId: Int?, onBack: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val editing = editExpenseId != null
     LaunchedEffect(state.saved) { if (state.saved) onBack() }
-    LaunchedEffect(groups, initialGroupId) {
-        (initialGroupId?.takeIf { id -> groups.any { it.id == id } } ?: groups.firstOrNull()?.id)?.let(vm::selectGroup)
+    LaunchedEffect(editExpenseId) { editExpenseId?.let(vm::startEditing) }
+    LaunchedEffect(groups, initialGroupId, editing) {
+        if (!editing) (initialGroupId?.takeIf { id -> groups.any { it.id == id } } ?: groups.firstOrNull()?.id)?.let(vm::selectGroup)
     }
 
-    var name by rememberSaveable { mutableStateOf("") }
-    var description by rememberSaveable { mutableStateOf("") }
-    var amount by rememberSaveable { mutableStateOf("") }
-    var paidBy by rememberSaveable { mutableStateOf<Int?>(userId) }
-    var splitOn by rememberSaveable(state.groupId) { mutableStateOf<List<Int>?>(null) }
-    val c = MaterialTheme.split
-
     Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
-        NavBar("Add Expense", onBack) {
-            val members = (state.members as? Load.Ready)?.data.orEmpty()
-            SmallButton("Save", { vm.save(name, description, amount, paidBy, (splitOn ?: members.map { it.id }).toSet()) })
+        if (editing) {
+            when (val e = state.editing) {
+                null, Load.Loading -> { NavBar("Edit Expense", onBack); SkeletonList() }
+                is Load.Error -> { NavBar("Edit Expense", onBack); LoadView(e, onRetry = { editExpenseId?.let(vm::startEditing) }) {} }
+                is Load.Ready -> ExpenseForm(vm, state, groups, e.data, userId, onBack)
+            }
+        } else {
+            ExpenseForm(vm, state, groups, null, userId, onBack)
         }
-        if (groups.isEmpty()) return@Column EmptyState("Create a group first, then add expenses to it.")
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            SplitCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Total amount", color = c.fg2, style = MaterialTheme.typography.labelMedium)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Rs", color = c.fg2, style = MaterialTheme.typography.titleLarge)
-                        Spacer(Modifier.width(6.dp))
-                        BasicAmountField(amount) { amount = it }
-                    }
+    }
+}
+
+@Composable
+private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.State, groups: List<Group>, existing: com.splitwise.app.data.Expense?, userId: Int?, onBack: () -> Unit) {
+    val c = MaterialTheme.split
+    var name by rememberSaveable { mutableStateOf(existing?.name.orEmpty()) }
+    var description by rememberSaveable { mutableStateOf(existing?.description.orEmpty()) }
+    var amount by rememberSaveable { mutableStateOf(existing?.amount?.toMoney()?.stripTrailingZeros()?.toPlainString().orEmpty()) }
+    var paidBy by rememberSaveable { mutableStateOf<Int?>(existing?.paidBy?.firstOrNull() ?: userId) }
+    var splitOn by rememberSaveable(state.groupId) { mutableStateOf<List<Int>?>(existing?.splitOn?.takeIf { it.isNotEmpty() }) }
+    var mode by rememberSaveable {
+        mutableStateOf(
+            when {
+                existing?.splitDetails?.any { it.amount != null } == true -> SplitMode.Exact
+                existing?.splitDetails?.any { it.percentage != null } == true -> SplitMode.Percent
+                else -> SplitMode.Equal
+            }.name
+        )
+    }
+    val values = remember {
+        mutableStateMapOf<Int, String>().apply {
+            existing?.splitDetails?.forEach { d -> (d.amount ?: d.percentage)?.let { put(d.userId, it.toMoney().stripTrailingZeros().toPlainString()) } }
+        }
+    }
+    val splitMode = SplitMode.valueOf(mode)
+
+    NavBar(if (existing != null) "Edit Expense" else "Add Expense", onBack) {
+        val members = (state.members as? Load.Ready)?.data.orEmpty()
+        SmallButton("Save", { vm.save(name, description, amount, paidBy, SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap())) })
+    }
+    if (groups.isEmpty() && existing == null) return EmptyState("Create a group first, then add expenses to it.")
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SplitCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Total amount", color = c.fg2, style = MaterialTheme.typography.labelMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Rs", color = c.fg2, style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.width(6.dp))
+                    BasicAmountField(amount) { amount = it }
                 }
             }
-            state.error?.let { ErrorBanner(it) }
-            IconField(name, { name = it }, "Expense name", Icons.Default.Receipt)
-            IconField(description, { description = it }, "Description (optional)", Icons.Default.Notes)
+        }
+        state.error?.let { ErrorBanner(it) }
+        IconField(name, { name = it }, "Expense name", Icons.Default.Receipt)
+        IconField(description, { description = it }, "Description (optional)", Icons.Default.Notes)
 
+        if (existing == null) {
             Text("Group", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                groups.forEach { g ->
-                    SelectChip("${emojiFor(g.id)}  ${g.name}", selected = g.id == state.groupId) { vm.selectGroup(g.id); paidBy = userId }
-                }
+                groups.forEach { g -> SelectChip("${g.emoji()}  ${g.name}", selected = g.id == state.groupId) { vm.selectGroup(g.id); paidBy = userId; values.clear() } }
             }
-
-            LoadView(state.members, onRetry = { state.groupId?.let(vm::selectGroup) }, modifier = Modifier.heightIn(min = 120.dp)) { members ->
-                val selected = splitOn ?: members.map { it.id }
-                val total = amount.toBigDecimalOrNull()?.takeIf { it.signum() > 0 } ?: BigDecimal.ZERO
-                val each = if (selected.isEmpty()) BigDecimal.ZERO else total.divide(BigDecimal(selected.size), 2, RoundingMode.HALF_UP)
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Paid by", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        members.forEach { m -> PersonPick(m.id, initials(m.name, m.username), if (m.id == userId) "You" else m.username, paidBy == m.id) { paidBy = m.id } }
-                    }
-                    Text("Split between", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        members.forEach { m ->
-                            val on = m.id in selected
-                            PersonPick(m.id, initials(m.name, m.username), if (m.id == userId) "You" else m.username, on) {
-                                splitOn = if (on) selected - m.id else selected + m.id
-                            }
-                        }
-                    }
-                    if (selected.isNotEmpty() && total.signum() > 0) {
-                        SplitCard(Modifier.fillMaxWidth()) {
-                            Text("Equally split — ${formatRs(each, forceDecimals = true)} each", Modifier.padding(16.dp, 14.dp, 16.dp, 6.dp), color = c.fg2, style = MaterialTheme.typography.titleSmall)
-                            members.filter { it.id in selected }.forEach { m ->
-                                Row(Modifier.fillMaxWidth().padding(16.dp, 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Avatar(initials(m.name, m.username), m.id, 32.dp)
-                                    Text(m.username + if (m.id == userId) " (you)" else "", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                                    Text(formatRs(each, forceDecimals = true), style = MaterialTheme.typography.titleSmall)
-                                }
-                            }
-                            Spacer(Modifier.height(6.dp))
-                        }
-                    }
-                }
-            }
-            PrimaryButton("Save expense", { 
-                val members = (state.members as? Load.Ready)?.data.orEmpty()
-                vm.save(name, description, amount, paidBy, (splitOn ?: members.map { it.id }).toSet())
-            }, busy = state.busy)
-            Spacer(Modifier.height(16.dp))
         }
+
+        LoadView(state.members, onRetry = { state.groupId?.let(vm::selectGroup) }, modifier = Modifier.heightIn(min = 120.dp)) { members ->
+            val selected = splitOn ?: members.map { it.id }
+            val total = amount.toBigDecimalOrNull()?.takeIf { it.signum() > 0 } ?: BigDecimal.ZERO
+            fun equalValue(forMode: SplitMode): String = when {
+                selected.isEmpty() -> ""
+                forMode == SplitMode.Percent -> BigDecimal(100).divide(BigDecimal(selected.size), 2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+                else -> total.divide(BigDecimal(selected.size), 2, RoundingMode.HALF_UP).toPlainString()
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Paid by", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    members.forEach { m -> PersonPick(m.id, initials(m.name, m.username), if (m.id == userId) "You" else m.username, paidBy == m.id) { paidBy = m.id } }
+                }
+                Text("Split between", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    members.forEach { m ->
+                        val on = m.id in selected
+                        PersonPick(m.id, initials(m.name, m.username), if (m.id == userId) "You" else m.username, on) {
+                            splitOn = if (on) selected - m.id else selected + m.id
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(SplitMode.Equal to "Equally", SplitMode.Exact to "Amounts", SplitMode.Percent to "Percent").forEach { (m, label) ->
+                        SelectChip(label, splitMode == m) {
+                            mode = m.name
+                            values.clear()
+                            if (m != SplitMode.Equal) { val v = equalValue(m); selected.forEach { values[it] = v } }
+                        }
+                    }
+                }
+                if (selected.isNotEmpty()) SplitCard(Modifier.fillMaxWidth()) {
+                    val shown = members.filter { it.id in selected }
+                    val sum = shown.fold(BigDecimal.ZERO) { a, m -> a + (values[m.id]?.toBigDecimalOrNull() ?: BigDecimal.ZERO) }
+                    Text(
+                        when (splitMode) {
+                            SplitMode.Equal -> if (total.signum() > 0) "Equally split — ${formatRs(total.divide(BigDecimal(selected.size), 2, RoundingMode.HALF_UP), true)} each" else "Equally split"
+                            SplitMode.Exact -> "Enter each share — ${formatRs(sum, true)} of ${formatRs(total, true)}"
+                            SplitMode.Percent -> "Enter each share — ${sum.stripTrailingZeros().toPlainString()}% of 100%"
+                        },
+                        Modifier.padding(16.dp, 14.dp, 16.dp, 6.dp), color = c.fg2, style = MaterialTheme.typography.titleSmall,
+                    )
+                    shown.forEach { m ->
+                        Row(Modifier.fillMaxWidth().padding(16.dp, 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Avatar(initials(m.name, m.username), m.id, 32.dp)
+                            Text(m.username + if (m.id == userId) " (you)" else "", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            if (splitMode == SplitMode.Equal) {
+                                Text(formatRs(total.divide(BigDecimal(selected.size), 2, RoundingMode.HALF_UP), true), style = MaterialTheme.typography.titleSmall)
+                            } else {
+                                OutlinedTextField(
+                                    values[m.id].orEmpty(), { v -> if (v.matches(Regex("""\d{0,9}([.]\d{0,2})?"""))) values[m.id] = v },
+                                    singleLine = true, modifier = Modifier.width(110.dp), shape = RoundedCornerShape(10.dp),
+                                    suffix = { if (splitMode == SplitMode.Percent) Text("%") },
+                                    prefix = { if (splitMode == SplitMode.Exact) Text("Rs ") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    textStyle = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+            }
+        }
+        PrimaryButton(if (existing != null) "Save changes" else "Save expense", {
+            val members = (state.members as? Load.Ready)?.data.orEmpty()
+            vm.save(name, description, amount, paidBy, SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap()))
+        }, busy = state.busy)
+        Spacer(Modifier.height(16.dp))
     }
 }
 
@@ -186,7 +247,7 @@ fun InvitesScreen(overview: Overview, userId: Int?, search: InviteSearchViewMode
                     if (overview.groups.isNotEmpty()) {
                         Text("Invite to", Modifier.padding(16.dp, 16.dp, 16.dp, 6.dp), color = MaterialTheme.split.fg2, style = MaterialTheme.typography.titleSmall)
                         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            overview.groups.forEach { g -> SelectChip("${emojiFor(g.id)}  ${g.name}", g.id == groupId) { groupId = g.id } }
+                            overview.groups.forEach { g -> SelectChip("${g.emoji()}  ${g.name}", g.id == groupId) { groupId = g.id } }
                         }
                     }
                 }
@@ -278,7 +339,7 @@ fun ActivityScreen(overview: Overview, onMarkRead: (com.splitwise.app.data.AppNo
 
 @Composable
 fun AccountScreen(
-    overview: Overview, dark: Boolean, onDarkChange: (Boolean) -> Unit, onLogout: () -> Unit,
+    overview: Overview, dark: Boolean, onDarkChange: (Boolean) -> Unit, alertsOn: Boolean, onAlertsChange: (Boolean) -> Unit, onLogout: () -> Unit,
     onEditProfile: () -> Unit, onChangePassword: () -> Unit, onPayments: () -> Unit, onDeleteAccount: (String) -> Unit,
 ) {
     val me = overview.me
@@ -305,6 +366,14 @@ fun AccountScreen(
                     Text("Switch to dark theme", color = c.fg2, style = MaterialTheme.typography.bodySmall)
                 }
                 Switch(dark, onDarkChange, colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary))
+            }
+            Divider16()
+            Row(Modifier.padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Notifications", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium))
+                    Text("Unread badge for expense alerts and settlements", color = c.fg2, style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(alertsOn, onAlertsChange, colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary))
             }
             Divider16()
             Row(Modifier.padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {

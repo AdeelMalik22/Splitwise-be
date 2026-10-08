@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -33,10 +34,11 @@ import com.splitwise.app.data.Settlements
 import com.splitwise.app.data.UserSummary
 import java.math.BigDecimal
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupDetailScreen(
     vm: GroupDetailViewModel, groupId: Int, title: String, userId: Int?, onBack: () -> Unit, onAddExpense: () -> Unit,
-    onSettle: (SettleTarget) -> Unit, onLeave: () -> Unit,
+    onSettle: (SettleTarget) -> Unit, onLeave: () -> Unit, emoji: String, onSettings: () -> Unit, onEditExpense: (Expense) -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -75,6 +77,7 @@ fun GroupDetailScreen(
                 Box {
                     IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "More", tint = MaterialTheme.split.fg2) }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(text = { Text("Group settings") }, onClick = { menuOpen = false; onSettings() })
                         DropdownMenuItem(
                             text = { Text("Leave group", color = MaterialTheme.colorScheme.error) },
                             onClick = { menuOpen = false; confirmLeave = true },
@@ -85,7 +88,7 @@ fun GroupDetailScreen(
             val members = (state.members as? Load.Ready)?.data.orEmpty()
             val expenses = (state.expenses as? Load.Ready)?.data.orEmpty()
             val settlements = (state.settlements as? Load.Ready)?.data
-            GroupHeader(groupId, title, members, expenses, settlements)
+            GroupHeader(emoji, title, members, expenses, settlements)
             TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.primary) {
                 listOf("Expenses", "Balances", "Members").forEachIndexed { i, label ->
                     Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label, style = MaterialTheme.typography.titleSmall) },
@@ -93,10 +96,12 @@ fun GroupDetailScreen(
                 }
             }
             val names = members.associate { it.id to it }
-            when (tab) {
-                0 -> LoadView(state.expenses, { vm.refresh() }) { ExpensesTab(it, names, userId) { e -> openExpenseId = e.id } }
-                1 -> LoadView(state.settlements, { vm.refresh() }) { BalancesTab(it, members, groupId, title, onSettle) }
-                else -> LoadView(state.members, { vm.refresh() }) { MembersTab(it, state.searchResults, vm::search, vm::invite) }
+            PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::pullRefresh, modifier = Modifier.fillMaxSize()) {
+                when (tab) {
+                    0 -> LoadView(state.expenses, { vm.refresh() }) { ExpensesTab(it, names, userId) { e -> openExpenseId = e.id } }
+                    1 -> LoadView(state.settlements, { vm.refresh() }) { BalancesTab(it, members, groupId, title, onSettle) }
+                    else -> LoadView(state.members, { vm.refresh() }) { MembersTab(it, state.searchResults, vm::search, vm::invite) }
+                }
             }
         }
     }
@@ -127,12 +132,13 @@ fun GroupDetailScreen(
     if (openExpense != null) ExpenseSheet(
         openExpense, (state.members as? Load.Ready)?.data.orEmpty(), userId,
         onDismiss = { openExpenseId = null }, onDelete = { confirmDelete = openExpense },
+        onEdit = { openExpenseId = null; onEditExpense(openExpense) },
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ExpenseSheet(e: Expense, members: List<Member>, userId: Int?, onDismiss: () -> Unit, onDelete: () -> Unit) {
+private fun ExpenseSheet(e: Expense, members: List<Member>, userId: Int?, onDismiss: () -> Unit, onDelete: () -> Unit, onEdit: () -> Unit) {
     val c = MaterialTheme.split
     val byId = members.associateBy { it.id }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
@@ -152,6 +158,7 @@ private fun ExpenseSheet(e: Expense, members: List<Member>, userId: Int?, onDism
                 }
             }
             Spacer(Modifier.height(4.dp))
+            PrimaryButton("Edit expense", onEdit)
             Box(
                 Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(14.dp))
                     .border(1.5.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f), RoundedCornerShape(14.dp)).clickable(onClick = onDelete),
@@ -162,14 +169,14 @@ private fun ExpenseSheet(e: Expense, members: List<Member>, userId: Int?, onDism
 }
 
 @Composable
-private fun GroupHeader(groupId: Int, title: String, members: List<Member>, expenses: List<Expense>, s: Settlements?) {
+private fun GroupHeader(emoji: String, title: String, members: List<Member>, expenses: List<Expense>, s: Settlements?) {
     val c = MaterialTheme.split
     val total = expenses.fold(BigDecimal.ZERO) { a, e -> a + e.amount.toMoney() }
     val owe = s?.youOwe.orEmpty().fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
     val owed = s?.owedToYou.orEmpty().fold(BigDecimal.ZERO) { a, l -> a + l.amount.toMoney() }
     SplitCard(Modifier.padding(16.dp, 4.dp, 16.dp, 12.dp).fillMaxWidth()) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(c.primaryBg), contentAlignment = Alignment.Center) { Text(emojiFor(groupId), fontSize = 24.sp) }
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(c.primaryBg), contentAlignment = Alignment.Center) { Text(emoji, fontSize = 24.sp) }
             Column {
                 Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

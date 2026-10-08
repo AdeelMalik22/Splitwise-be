@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +68,8 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
     val overviewVm = appViewModel(key = "overview") { OverviewViewModel(it) }
     val load by overviewVm.state.collectAsStateWithLifecycle()
     val message by overviewVm.message.collectAsStateWithLifecycle()
+    val refreshing by overviewVm.refreshing.collectAsStateWithLifecycle()
+    val alertsOn by session.alertsOn.collectAsStateWithLifecycle(initialValue = true)
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
     val tab = tabRoutes[route]
     var showCreateGroup by remember { mutableStateOf(false) }
@@ -94,13 +97,13 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
                     }
                 },
                 onAdd = { nav.navigate("add") },
-                unread = ready?.notifications?.any { it.readAt == null } == true,
+                unread = alertsOn && ready?.notifications?.any { it.readAt == null } == true,
             )
         },
     ) { padding ->
         NavHost(nav, startDestination = "home", modifier = Modifier.padding(if (tab != null) padding else PaddingValues(0.dp))) {
             composable("home") {
-                TabFrame(load, overviewVm::refresh) { o ->
+                TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { o ->
                     HomeScreen(
                         o, userId,
                         onOpenGroup = { nav.navigate("group/${it.id}?name=${android.net.Uri.encode(it.name)}") },
@@ -113,7 +116,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
                 }
             }
             composable("groups") {
-                TabFrame(load, overviewVm::refresh) { o ->
+                TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { o ->
                     GroupsScreen(
                         o,
                         onOpenGroup = { nav.navigate("group/${it.id}?name=${android.net.Uri.encode(it.name)}") },
@@ -122,11 +125,11 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
                     )
                 }
             }
-            composable("activity") { TabFrame(load, overviewVm::refresh) { ActivityScreen(it, overviewVm::markRead) } }
+            composable("activity") { TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { ActivityScreen(it, overviewVm::markRead) } }
             composable("account") {
-                TabFrame(load, overviewVm::refresh) {
+                TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) {
                     AccountScreen(
-                        it, isDark, session::setDarkMode, session::logout,
+                        it, isDark, session::setDarkMode, alertsOn, session::setAlertsOn, session::logout,
                         onEditProfile = { nav.navigate("profile/edit") },
                         onChangePassword = { nav.navigate("profile/password") },
                         onPayments = { nav.navigate("settle") },
@@ -153,16 +156,40 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
                         )
                     },
                     onLeave = { overviewVm.leaveGroup(id) { nav.popBackStack("home", false) } },
+                    emoji = ready?.groups?.firstOrNull { it.id == id }?.emoji() ?: emojiFor(id),
+                    onSettings = { nav.navigate("group/$id/settings") },
+                    onEditExpense = { e -> nav.navigate("add?group=$id&edit=${e.id}") },
                 )
             }
-            composable("add?group={group}", arguments = listOf(navArgument("group") { type = NavType.IntType; defaultValue = -1 })) { entry ->
+            composable(
+                "add?group={group}&edit={edit}",
+                arguments = listOf(
+                    navArgument("group") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("edit") { type = NavType.IntType; defaultValue = -1 },
+                ),
+            ) { entry ->
                 AddExpenseScreen(
-                    vm = appViewModel { AddExpenseViewModel(it) },
+                    vm = appViewModel(key = "add-${entry.arguments!!.getInt("edit")}") { AddExpenseViewModel(it) },
                     groups = ready?.groups.orEmpty(),
                     initialGroupId = entry.arguments!!.getInt("group").takeIf { it >= 0 },
+                    editExpenseId = entry.arguments!!.getInt("edit").takeIf { it >= 0 },
                     userId = userId,
                     onBack = { overviewVm.refresh(silent = true); nav.popBackStack() },
                 )
+            }
+            composable("group/{id}/settings", arguments = listOf(navArgument("id") { type = NavType.IntType })) { entry ->
+                val id = entry.arguments!!.getInt("id")
+                TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { o ->
+                    val group = o.groups.firstOrNull { it.id == id }
+                    if (group == null) EmptyState("This group is no longer available.")
+                    else GroupSettingsScreen(
+                        group, o.members[id].orEmpty(), userId,
+                        onSave = { n, d, i -> overviewVm.updateGroup(id, n, d, i) { nav.popBackStack() } },
+                        onRemove = { uid -> overviewVm.removeMember(id, uid) },
+                        onDelete = { overviewVm.deleteGroup(id) { nav.popBackStack("home", false) } },
+                        onBack = { nav.popBackStack() },
+                    )
+                }
             }
             composable(
                 "settle?group={group}&gname={gname}&to={to}&pname={pname}&amount={amount}",
@@ -178,7 +205,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
                 val target = if (a.getInt("group") >= 0 && a.getInt("to") >= 0) {
                     SettleTarget(a.getInt("group"), a.getString("gname").orEmpty(), a.getInt("to"), a.getString("pname").orEmpty(), a.getString("amount").orEmpty())
                 } else null
-                TabFrame(load, overviewVm::refresh) { o ->
+                TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { o ->
                     SettleUpScreen(
                         o, userId, target,
                         onPay = { g, to, amt -> overviewVm.pay(g, to, amt) { nav.popBackStack() } },
@@ -188,7 +215,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
                 }
             }
             composable("profile/edit") {
-                TabFrame(load, overviewVm::refresh) { o ->
+                TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { o ->
                     EditProfileScreen(o, onSave = { id, n, e -> overviewVm.updateProfile(id, n, e) { nav.popBackStack() } }, onBack = { nav.popBackStack() })
                 }
             }
@@ -196,7 +223,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
                 ChangePasswordScreen(onSave = { old, new -> overviewVm.changePassword(old, new) { nav.popBackStack() } }, onBack = { nav.popBackStack() })
             }
             composable("invites") {
-                TabFrame(load, overviewVm::refresh) { o ->
+                TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { o ->
                     InvitesScreen(o, userId, appViewModel { InviteSearchViewModel(it) }, overviewVm::respond, onSent = { overviewVm.refresh(silent = true) }, onBack = { nav.popBackStack() })
                 }
             }
@@ -205,14 +232,18 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
 
     if (showCreateGroup) CreateGroupDialog(
         onDismiss = { showCreateGroup = false },
-        onCreate = { n, d -> overviewVm.createGroup(n, d) { showCreateGroup = false } },
+        onCreate = { n, d, icon -> overviewVm.createGroup(n, d, icon) { showCreateGroup = false } },
     )
 }
 
-/** Shared loading/error handling and system-bar padding for every screen backed by [Overview]. */
+/** Shared loading/error handling, pull-to-refresh and system-bar padding for every screen backed by [Overview]. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TabFrame(load: Load<Overview>, onRetry: () -> Unit, content: @Composable (Overview) -> Unit) {
-    Box(Modifier.fillMaxSize().systemBarsPadding().consumeWindowInsets(WindowInsets.systemBars)) {
+private fun TabFrame(load: Load<Overview>, refreshing: Boolean, onPull: () -> Unit, onRetry: () -> Unit, content: @Composable (Overview) -> Unit) {
+    PullToRefreshBox(
+        isRefreshing = refreshing, onRefresh = onPull,
+        modifier = Modifier.fillMaxSize().systemBarsPadding().consumeWindowInsets(WindowInsets.systemBars),
+    ) {
         LoadView(load, onRetry) { content(it) }
     }
 }

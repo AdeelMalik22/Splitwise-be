@@ -25,6 +25,11 @@ class TokenStore(private val context: Context) {
     private val userIdKey = intPreferencesKey("user_id")
 
     /** null until the first read completes is avoided: this emits the stored state immediately. */
+    private val alertsKey = booleanPreferencesKey("alerts_on")
+    /** Show the unread badge on the Activity tab. A device setting like dark mode. */
+    val alertsOn: Flow<Boolean> = context.dataStore.data.map { it[alertsKey] ?: true }
+    suspend fun setAlertsOn(on: Boolean) { context.dataStore.edit { it[alertsKey] = on } }
+
     private val darkKey = booleanPreferencesKey("dark_mode")
     /** null = follow the system theme. Survives sign-out (it's a device setting). */
     val darkMode: Flow<Boolean?> = context.dataStore.data.map { it[darkKey] }

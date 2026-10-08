@@ -54,6 +54,8 @@ class SessionViewModel(private val repo: Repository) : ViewModel() {
     val loggedIn = repo.loggedIn
     val userId = repo.userId
     val darkMode = repo.darkMode
+    val alertsOn = repo.alertsOn
+    fun setAlertsOn(on: Boolean) { viewModelScope.launch { repo.setAlertsOn(on) } }
     fun setDarkMode(dark: Boolean) { viewModelScope.launch { repo.setDarkMode(dark) } }
     fun logout() { viewModelScope.launch { repo.logout() } }
 }
@@ -84,17 +86,29 @@ class OverviewViewModel(private val repo: Repository) : ViewModel() {
     val state: StateFlow<Load<Overview>> = _state.asStateFlow()
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
     init { refresh() }
 
+    /** Pull-to-refresh: shows the spinner until the reload finishes. */
+    fun pullRefresh() = refresh(silent = true, showSpinner = true)
+
     /** [silent] keeps what is on screen while reloading and after a transient failure. */
-    fun refresh(silent: Boolean = false) {
+    fun refresh(silent: Boolean = false, showSpinner: Boolean = false) {
         viewModelScope.launch {
+            if (showSpinner) _refreshing.value = true
+            try { load(silent) } finally { _refreshing.value = false }
+        }
+    }
+
+    private suspend fun load(silent: Boolean) {
+        kotlinx.coroutines.coroutineScope {
             if (!silent && _state.value !is Load.Ready) _state.value = Load.Loading
             val groupsResult = repo.groups()
             val groups = groupsResult.getOrElse {
                 if (!(silent && _state.value is Load.Ready)) _state.value = Load.Error(it.userMessage())
-                return@launch
+                return@coroutineScope
             }
             val me = async { repo.profile().getOrNull() }
             val balances = async { repo.balances(groups) }
@@ -114,9 +128,9 @@ class OverviewViewModel(private val repo: Repository) : ViewModel() {
         }
     }
 
-    fun createGroup(name: String, description: String, onDone: () -> Unit) {
+    fun createGroup(name: String, description: String, icon: String, onDone: () -> Unit) {
         viewModelScope.launch {
-            repo.createGroup(name, description).fold(
+            repo.createGroup(name, description, icon).fold(
                 { refresh(silent = true); onDone() },
                 { _message.value = it.userMessage() },
             )
@@ -153,6 +167,13 @@ class OverviewViewModel(private val repo: Repository) : ViewModel() {
     fun confirmPayment(p: Payment) = act({ repo.confirmPayment(p.id) }, "Payment confirmed.")
     fun cancelPayment(p: Payment) = act({ repo.cancelPayment(p.id) }, "Payment cancelled.")
 
+    fun updateGroup(id: Int, name: String, description: String, icon: String, onDone: () -> Unit) =
+        act({ repo.updateGroup(id, name, description, icon) }, "Group updated.", onDone)
+
+    fun deleteGroup(id: Int, onDone: () -> Unit) = act({ repo.deleteGroup(id) }, "Group deleted.", onDone)
+
+    fun removeMember(groupId: Int, userId: Int) = act({ repo.removeMember(groupId, userId) }, "Member removed.")
+
     fun leaveGroup(groupId: Int, onDone: () -> Unit) = act({ repo.leaveGroup(groupId) }, "You left the group.", onDone)
 
     fun updateProfile(userId: Int, name: String, email: String, onDone: () -> Unit) =
@@ -172,12 +193,18 @@ class GroupDetailViewModel(private val repo: Repository, private val groupId: In
         val members: Load<List<Member>> = Load.Loading,
         val searchResults: List<UserSummary> = emptyList(),
         val message: String? = null,
+        val refreshing: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
     init { refresh() }
+
+    fun pullRefresh() {
+        _state.update { it.copy(refreshing = true) }
+        refresh(silent = true)
+    }
 
     /** [silent] polls in the background: failures keep the data already on screen. */
     fun refresh(silent: Boolean = false) {
@@ -189,7 +216,7 @@ class GroupDetailViewModel(private val repo: Repository, private val groupId: In
             _state.update { cur ->
                 fun <T> pick(r: Result<T>, old: Load<T>): Load<T> =
                     if (silent && r.isFailure && old is Load.Ready) old else r.toLoad()
-                cur.copy(expenses = pick(er, cur.expenses), settlements = pick(sr, cur.settlements), members = pick(mr, cur.members))
+                cur.copy(expenses = pick(er, cur.expenses), settlements = pick(sr, cur.settlements), members = pick(mr, cur.members), refreshing = false)
             }
         }
     }
@@ -223,10 +250,16 @@ class GroupDetailViewModel(private val repo: Repository, private val groupId: In
     fun messageShown() = _state.update { it.copy(message = null) }
 }
 
+enum class SplitMode { Equal, Exact, Percent }
+
+/** [values] holds the typed amount or percentage per member; ignored for equal splits. */
+data class SplitInput(val mode: SplitMode, val members: Set<Int>, val values: Map<Int, String>)
+
 class AddExpenseViewModel(private val repo: Repository) : ViewModel() {
     data class State(
         val groupId: Int? = null,
         val members: Load<List<Member>> = Load.Loading,
+        val editing: Load<Expense>? = null,
         val busy: Boolean = false,
         val error: String? = null,
         val saved: Boolean = false,
@@ -234,6 +267,19 @@ class AddExpenseViewModel(private val repo: Repository) : ViewModel() {
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
+    private var editId: Int? = null
+
+    /** Loads an existing expense so the form can be prefilled; its group is then fixed. */
+    fun startEditing(expenseId: Int) {
+        if (editId == expenseId) return
+        editId = expenseId
+        _state.update { it.copy(editing = Load.Loading) }
+        viewModelScope.launch {
+            val result = repo.expense(expenseId)
+            _state.update { it.copy(editing = result.toLoad()) }
+            result.onSuccess { selectGroup(it.groupId) }
+        }
+    }
 
     fun selectGroup(groupId: Int) {
         if (_state.value.groupId == groupId) return
@@ -244,25 +290,40 @@ class AddExpenseViewModel(private val repo: Repository) : ViewModel() {
         }
     }
 
-    fun save(name: String, description: String, amountText: String, paidBy: Int?, splitOn: Set<Int>) {
-        val amount = amountText.trim().toBigDecimalOrNull()
+    fun save(name: String, description: String, amountText: String, paidBy: Int?, split: SplitInput) {
+        val amount = amountText.trim().toBigDecimalOrNull()?.setScale(2, java.math.RoundingMode.HALF_UP)
         val groupId = _state.value.groupId
+        val shares = split.members.associateWith { split.values[it]?.trim()?.toBigDecimalOrNull() }
+        val sum = shares.values.fold(BigDecimal.ZERO) { a, v -> a + (v ?: BigDecimal.ZERO) }
         val error = when {
             groupId == null -> "Choose a group."
             name.isBlank() -> "Enter an expense name."
             amount == null || amount <= BigDecimal.ZERO -> "Enter an amount greater than zero."
             paidBy == null -> "Choose who paid."
-            splitOn.isEmpty() -> "Choose at least one person to split with."
+            split.members.isEmpty() -> "Choose at least one person to split with."
+            split.mode != SplitMode.Equal && shares.values.any { it == null || it < BigDecimal.ZERO } -> "Enter a value for everyone in the split."
+            split.mode == SplitMode.Exact && (sum - amount).abs() > BigDecimal("0.01") ->
+                "Amounts add up to ${formatRs(sum, true)}, but the total is ${formatRs(amount, true)}."
+            split.mode == SplitMode.Percent && (sum - BigDecimal(100)).abs() > BigDecimal("0.01") ->
+                "Percentages add up to ${sum.stripTrailingZeros().toPlainString()}%, not 100%."
             else -> null
         }
         if (error != null) return _state.update { it.copy(error = error) }
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, error = null) }
+
+        val request = ExpenseRequest(
+            name = name.trim(), description = description.trim(), amount = amount!!.toPlainString(),
+            paidBy = listOf(paidBy!!), groupId = groupId!!,
+            splitOn = if (split.mode == SplitMode.Equal) split.members.toList() else null,
+            splitDetails = when (split.mode) {
+                SplitMode.Equal -> null
+                SplitMode.Exact -> shares.map { (id, v) -> SplitShare(id, amount = v!!.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()) }
+                SplitMode.Percent -> shares.map { (id, v) -> SplitShare(id, percentage = v!!.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()) }
+            },
+        )
         viewModelScope.launch {
-            val result = repo.createExpense(
-                ExpenseRequest(name.trim(), description.trim(), amount!!.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString(),
-                    listOf(paidBy!!), splitOn.toList(), groupId!!)
-            )
+            val result = editId?.let { repo.updateExpense(it, request) } ?: repo.createExpense(request)
             _state.update { s ->
                 result.fold({ s.copy(busy = false, saved = true) }, { s.copy(busy = false, error = it.userMessage()) })
             }

@@ -51,6 +51,8 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     val loggedIn: Flow<Boolean> = tokens.loggedIn
     val userId: Flow<Int?> = tokens.userId
     val darkMode: Flow<Boolean?> = tokens.darkMode
+    val alertsOn: Flow<Boolean> = tokens.alertsOn
+    suspend fun setAlertsOn(on: Boolean) = tokens.setAlertsOn(on)
     suspend fun setDarkMode(dark: Boolean) = tokens.setDarkMode(dark)
 
     suspend fun login(username: String, password: String) = call {
@@ -67,7 +69,12 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     suspend fun logout() = tokens.clear()
 
     suspend fun groups() = call { api.groups().results }
-    suspend fun createGroup(name: String, description: String) = call { api.createGroup(GroupRequest(name.trim(), description.trim())) }
+    suspend fun createGroup(name: String, description: String, icon: String = "") =
+        call { api.createGroup(GroupRequest(name.trim(), description.trim(), icon)) }
+    suspend fun updateGroup(id: Int, name: String, description: String, icon: String) =
+        call { api.updateGroup(id, GroupRequest(name.trim(), description.trim(), icon)) }
+    suspend fun deleteGroup(id: Int) = call { api.deleteGroup(id) }
+    suspend fun removeMember(groupId: Int, userId: Int) = call { api.removeMember(groupId, userId) }
 
     suspend fun members(groupId: Int) = call { api.members(groupId) }
 
@@ -76,6 +83,8 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     }
 
     suspend fun createExpense(request: ExpenseRequest) = call { api.createExpense(request) }
+    suspend fun expense(id: Int) = call { api.expense(id) }
+    suspend fun updateExpense(id: Int, request: ExpenseRequest) = call { api.updateExpense(id, request) }
 
     suspend fun settlements(groupId: Int) = call {
         try {
