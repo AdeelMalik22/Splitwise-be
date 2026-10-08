@@ -52,7 +52,10 @@ private fun AppRoot() {
             when (loggedIn) {
                 null -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
                 false -> AuthScreen(appViewModel { AuthViewModel(it) })
-                true -> MainNav(session, dark ?: isSystemInDarkTheme())
+                true -> {
+                    val epoch by session.epoch.collectAsStateWithLifecycle()
+                    MainNav(session, dark ?: isSystemInDarkTheme(), epoch)
+                }
             }
         }
     }
@@ -61,11 +64,11 @@ private fun AppRoot() {
 private val tabRoutes = mapOf("home" to Tab.Home, "groups" to Tab.Groups, "activity" to Tab.Activity, "account" to Tab.Account)
 
 @Composable
-private fun MainNav(session: SessionViewModel, isDark: Boolean) {
+private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int) {
     val nav = rememberNavController()
     val userId by session.userId.collectAsStateWithLifecycle(initialValue = null)
     // One overview shared by every tab; re-created on sign-in because MainNav leaves composition on logout.
-    val overviewVm = appViewModel(key = "overview") { OverviewViewModel(it) }
+    val overviewVm = appViewModel(key = "overview-$epoch") { OverviewViewModel(it) }
     val load by overviewVm.state.collectAsStateWithLifecycle()
     val message by overviewVm.message.collectAsStateWithLifecycle()
     val refreshing by overviewVm.refreshing.collectAsStateWithLifecycle()
@@ -143,7 +146,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
             ) { entry ->
                 val id = entry.arguments!!.getInt("id")
                 GroupDetailScreen(
-                    vm = appViewModel(key = "group$id") { GroupDetailViewModel(it, id) },
+                    vm = appViewModel(key = "group$id-$epoch") { GroupDetailViewModel(it, id) },
                     groupId = id,
                     title = entry.arguments!!.getString("name").orEmpty().ifBlank { "Group" },
                     userId = userId,
@@ -169,7 +172,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
                 ),
             ) { entry ->
                 AddExpenseScreen(
-                    vm = appViewModel(key = "add-${entry.arguments!!.getInt("edit")}") { AddExpenseViewModel(it) },
+                    vm = appViewModel(key = "add-${entry.arguments!!.getInt("edit")}-$epoch") { AddExpenseViewModel(it) },
                     groups = ready?.groups.orEmpty(),
                     initialGroupId = entry.arguments!!.getInt("group").takeIf { it >= 0 },
                     editExpenseId = entry.arguments!!.getInt("edit").takeIf { it >= 0 },
@@ -224,7 +227,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean) {
             }
             composable("invites") {
                 TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) { o ->
-                    InvitesScreen(o, userId, appViewModel { InviteSearchViewModel(it) }, overviewVm::respond, onSent = { overviewVm.refresh(silent = true) }, onBack = { nav.popBackStack() })
+                    InvitesScreen(o, userId, appViewModel(key = "invite-search-$epoch") { InviteSearchViewModel(it) }, overviewVm::respond, onSent = { overviewVm.refresh(silent = true) }, onBack = { nav.popBackStack() })
                 }
             }
         }

@@ -51,6 +51,15 @@ class AuthViewModel(private val repo: Repository) : ViewModel() {
 }
 
 class SessionViewModel(private val repo: Repository) : ViewModel() {
+    private val _epoch = MutableStateFlow(0)
+
+    /** Changes on every sign-out, so screens created after the next sign-in start from a clean state. */
+    val epoch: StateFlow<Int> = _epoch.asStateFlow()
+
+    init {
+        viewModelScope.launch { repo.loggedIn.collect { signedIn -> if (!signedIn) _epoch.update { it + 1 } } }
+    }
+
     val loggedIn = repo.loggedIn
     val userId = repo.userId
     val darkMode = repo.darkMode
