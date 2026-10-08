@@ -70,7 +70,7 @@ class UserGroupViewSet(viewsets.ModelViewSet):
             return Response({"detail": "No users found for this group."}, status=status.HTTP_404_NOT_FOUND)
 
         user_ids = [ug['user_id'] for ug in user_groups]
-        users = User.objects.filter(id__in=user_ids).values()
+        users = User.objects.filter(id__in=user_ids).values('id', 'username', 'name')
 
         return Response(users, status=status.HTTP_200_OK)
 
