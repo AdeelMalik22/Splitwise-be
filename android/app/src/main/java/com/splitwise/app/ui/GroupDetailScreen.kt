@@ -103,7 +103,7 @@ fun GroupDetailScreen(
                     0 -> LoadView(state.expenses, { vm.refresh() }) { ExpensesTab(it, names, userId) { e -> openExpenseId = e.id } }
                     1 -> LoadView(state.settlements, { vm.refresh() }) { BalancesTab(it, members, groupId, title, onSettle) }
                     else -> LoadView(state.members, { vm.refresh() }) {
-                        MembersTab(it, state.searchResults, vm::search, vm::invite, isAdmin) { if (isAdmin) confirmDeleteGroup = true else confirmLeave = true }
+                        MembersTab(it, state.searchResults, vm::search, vm::invite, isAdmin, vm::inviteByEmail) { if (isAdmin) confirmDeleteGroup = true else confirmLeave = true }
                     }
                 }
             }
@@ -289,8 +289,9 @@ private fun BalanceCard2(text: String, amount: BigDecimal, bg: Color, ring: Colo
 @Composable
 private fun MembersTab(
     members: List<Member>, results: List<UserSummary>, onSearch: (String) -> Unit, onInvite: (UserSummary) -> Unit,
-    isAdmin: Boolean, onDangerAction: () -> Unit,
+    isAdmin: Boolean, onInviteByEmail: (String, () -> Unit) -> Unit, onDangerAction: () -> Unit,
 ) {
+    var showEmailInvite by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     val memberIds = members.map { it.id }.toSet()
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -302,6 +303,14 @@ private fun MembersTab(
                 shape = RoundedCornerShape(50), modifier = Modifier.fillMaxWidth().padding(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = MaterialTheme.split.input, focusedContainerColor = MaterialTheme.colorScheme.surface, unfocusedBorderColor = MaterialTheme.colorScheme.outline),
             )
+        }
+        item {
+            Box(
+                Modifier.padding(16.dp, 0.dp, 16.dp, 8.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                    .clickable { showEmailInvite = true }.padding(14.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text("✉  Invite a friend by email", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall) }
         }
         items(results.filter { it.id !in memberIds }, key = { "r${it.id}" }) { u ->
             PersonRow(u.id, u.username, u.name, u.avatar) { SmallButton("Invite", { onInvite(u); query = "" }) }
@@ -320,6 +329,7 @@ private fun MembersTab(
             )
         }
     }
+    if (showEmailInvite) EmailInviteDialog(onDismiss = { showEmailInvite = false }, onSend = { email -> onInviteByEmail(email) { showEmailInvite = false } })
 }
 
 @Composable
@@ -332,4 +342,24 @@ fun PersonRow(id: Int, username: String, name: String, avatar: String? = null, t
         }
         trailing()
     }
+}
+
+@Composable
+private fun EmailInviteDialog(onDismiss: () -> Unit, onSend: (String) -> Unit) {
+    var email by rememberSaveable { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("Invite by email") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("They get an email with a link that opens SplitEase. If they're new, they create an account with that address and join this group automatically.",
+                    color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(email, { email = it }, label = { Text("Friend's email") }, singleLine = true, shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email))
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSend(email) }, enabled = email.isNotBlank()) { Text("Send invite") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }

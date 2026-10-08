@@ -364,6 +364,18 @@ class GroupDetailViewModel(private val repo: Repository, private val groupId: In
         }
     }
 
+    fun inviteByEmail(email: String, onSent: () -> Unit) {
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+            return _state.update { it.copy(message = "Enter a valid email address.") }
+        }
+        viewModelScope.launch {
+            repo.inviteByEmail(groupId, email).fold(
+                { _state.update { it.copy(message = "Invitation emailed to ${email.trim()}.") }; onSent() },
+                { err -> _state.update { it.copy(message = err.userMessage()) } },
+            )
+        }
+    }
+
     fun deleteExpense(expense: Expense) {
         viewModelScope.launch {
             repo.deleteExpense(expense.id).fold(
