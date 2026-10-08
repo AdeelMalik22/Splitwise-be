@@ -1,0 +1,3 @@
+-keepattributes *Annotation*, InnerClasses, Signature
+-keepclassmembers class com.splitwise.app.data.** { *** Companion; }
+-keepclasseswithmembers class com.splitwise.app.data.** { kotlinx.serialization.KSerializer serializer(...); }

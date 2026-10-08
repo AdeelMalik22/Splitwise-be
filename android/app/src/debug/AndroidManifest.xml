@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug builds talk to the local Django dev server over plain HTTP. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>
