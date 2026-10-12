@@ -63,11 +63,14 @@ data class Expense(
     val description: String = "",
     @Serializable(with = MoneySerializer::class) val amount: String,
     @SerialName("paid_by") val paidBy: List<Int> = emptyList(),
+    @SerialName("paid_details") val paidDetails: List<PaidDetail> = emptyList(),
     @SerialName("split_on") val splitOn: List<Int> = emptyList(),
     @SerialName("split_details") val splitDetails: List<SplitDetail> = emptyList(),
     @SerialName("group_id") val groupId: Int,
     @SerialName("created_at") val createdAt: String = "",
 )
+
+@Serializable data class PaidDetail(@SerialName("user_id") val userId: Int, @Serializable(with = MoneySerializer::class) val amount: String)
 
 @Serializable data class SplitShare(@SerialName("user_id") val userId: Int, val amount: String? = null, val percentage: String? = null)
 
@@ -78,6 +81,7 @@ data class ExpenseRequest(
     val description: String,
     val amount: String,
     @SerialName("paid_by") val paidBy: List<Int>,
+    @SerialName("paid_details") val paidDetails: List<PaidDetail>? = null,
     @SerialName("split_on") val splitOn: List<Int>? = null,
     @SerialName("split_details") val splitDetails: List<SplitShare>? = null,
     @SerialName("group_id") val groupId: Int,

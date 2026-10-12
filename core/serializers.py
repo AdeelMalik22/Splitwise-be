@@ -34,18 +34,23 @@ class UserGroupSerializer(serializers.ModelSerializer):
 
 class ExpenseSerializer(serializers.ModelSerializer):
     paid_by = serializers.ListField(child=serializers.IntegerField(), write_only=True)
+    paid_details = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
     split_on = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     split_details = serializers.ListField(child=serializers.DictField(), write_only=True, required=False)
 
     class Meta:
         model = Expense
-        fields = ('id', 'name', 'description', 'amount', 'paid_by', 'split_on', 'split_details',
+        fields = ('id', 'name', 'description', 'amount', 'paid_by', 'paid_details', 'split_on', 'split_details',
                   'group_id', 'created_at', 'updated_at')
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
         participants = instance.participants.all()
         data['paid_by'] = [p.user_id for p in participants if p.role == ExpenseParticipant.PAID]
+        data['paid_details'] = [
+            {'user_id': p.user_id, 'amount': p.share_amount}
+            for p in participants if p.role == ExpenseParticipant.PAID and p.share_amount is not None
+        ]
         data['split_on'] = [p.user_id for p in participants if p.role == ExpenseParticipant.SPLIT]
         data['split_details'] = [
             {'user_id': p.user_id, 'amount': p.share_amount, 'percentage': p.share_percentage}
@@ -56,6 +61,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         paid_by = validated_data.pop('paid_by')
+        paid_details = validated_data.pop('paid_details', [])
         split_details = validated_data.pop('split_details', [])
         split_on = validated_data.pop('split_on', [item['user_id'] for item in split_details])
         expense = Expense.objects.create(**validated_data)
@@ -65,6 +71,12 @@ class ExpenseSerializer(serializers.ModelSerializer):
                                     (ExpenseParticipant.SPLIT, split_on))
              for user_id in user_ids]
         )
+        if paid_details:
+            expense.participants.filter(role=ExpenseParticipant.PAID).delete()
+            ExpenseParticipant.objects.bulk_create([
+                ExpenseParticipant(expense=expense, user_id=item['user_id'], role=ExpenseParticipant.PAID,
+                                   share_amount=item.get('amount')) for item in paid_details
+            ])
         if split_details:
             expense.participants.filter(role=ExpenseParticipant.SPLIT).delete()
             ExpenseParticipant.objects.bulk_create([
@@ -76,6 +88,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         paid_by = validated_data.pop('paid_by', None)
+        paid_details = validated_data.pop('paid_details', None)
         split_on = validated_data.pop('split_on', None)
         split_details = validated_data.pop('split_details', None)
         instance = super().update(instance, validated_data)
@@ -94,6 +107,12 @@ class ExpenseSerializer(serializers.ModelSerializer):
                                    share_amount=item.get('amount'), share_percentage=item.get('percentage'))
                 for item in split_details
             ])
+        if paid_details is not None:
+            instance.participants.filter(role=ExpenseParticipant.PAID).delete()
+            ExpenseParticipant.objects.bulk_create([
+                ExpenseParticipant(expense=instance, user_id=item['user_id'], role=ExpenseParticipant.PAID,
+                                   share_amount=item.get('amount')) for item in paid_details
+            ])
         return instance
 
     def validate(self, attrs):
@@ -109,6 +128,16 @@ class ExpenseSerializer(serializers.ModelSerializer):
 
         member_ids = set(UserGroup.objects.filter(group_id=group).values_list('user_id', flat=True))
         details = attrs.get('split_details', [])
+        paid_details = attrs.get('paid_details', [])
+        if paid_details:
+            try:
+                paid_total = sum(Decimal(str(item.get('amount', '0'))) for item in paid_details)
+            except (InvalidOperation, ValueError, TypeError):
+                raise serializers.ValidationError({'paid_details': 'Paid amounts must be valid numbers.'})
+            if paid_total.quantize(Decimal('0.01')) != Decimal(str(amount)).quantize(Decimal('0.01')):
+                raise serializers.ValidationError({'paid_details': 'Paid amounts must equal the expense amount.'})
+            if len({item.get('user_id') for item in paid_details}) != len(paid_details):
+                raise serializers.ValidationError({'paid_details': 'Users must be unique.'})
         for field in ('paid_by', 'split_on'):
             role = ExpenseParticipant.PAID if field == 'paid_by' else ExpenseParticipant.SPLIT
             if field == 'split_on' and details:

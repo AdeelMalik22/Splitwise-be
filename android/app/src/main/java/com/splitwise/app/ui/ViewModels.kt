@@ -440,7 +440,7 @@ class GroupDetailViewModel(private val repo: Repository, private val groupId: In
 enum class SplitMode { Equal, Exact, Percent }
 
 /** [values] holds the typed amount or percentage per member; ignored for equal splits. */
-data class SplitInput(val mode: SplitMode, val members: Set<Int>, val values: Map<Int, String>)
+data class SplitInput(val mode: SplitMode, val members: Set<Int>, val values: Map<Int, String>, val payers: Set<Int>, val paidValues: Map<Int, String>)
 
 class AddExpenseViewModel(private val repo: Repository) : ViewModel() {
     data class State(
@@ -486,7 +486,9 @@ class AddExpenseViewModel(private val repo: Repository) : ViewModel() {
             groupId == null -> "Choose a group."
             name.isBlank() -> "Enter an expense name."
             amount == null || amount <= BigDecimal.ZERO -> "Enter an amount greater than zero."
-            paidBy == null -> "Choose who paid."
+            split.payers.isEmpty() -> "Choose who paid."
+            split.payers.size > 1 && split.paidValues.values.any { it.trim().toBigDecimalOrNull() == null } -> "Enter the amount paid by everyone."
+            split.payers.size > 1 && (split.paidValues.values.sumOf { it.trim().toBigDecimalOrNull() ?: BigDecimal.ZERO } - amount).abs() > BigDecimal("0.01") -> "Paid amounts must equal the total expense."
             split.members.isEmpty() -> "Choose at least one person to split with."
             split.mode != SplitMode.Equal && shares.values.any { it == null || it < BigDecimal.ZERO } -> "Enter a value for everyone in the split."
             split.mode == SplitMode.Exact && (sum - amount).abs() > BigDecimal("0.01") ->
@@ -501,7 +503,8 @@ class AddExpenseViewModel(private val repo: Repository) : ViewModel() {
 
         val request = ExpenseRequest(
             name = name.trim(), description = description.trim(), amount = amount!!.toPlainString(),
-            paidBy = listOf(paidBy!!), groupId = groupId!!,
+            paidBy = split.payers.toList(), groupId = groupId!!,
+            paidDetails = split.payers.takeIf { it.size > 1 }?.map { PaidDetail(it, split.paidValues[it]!!.trim()) },
             splitOn = if (split.mode == SplitMode.Equal) split.members.toList() else null,
             splitDetails = when (split.mode) {
                 SplitMode.Equal -> null

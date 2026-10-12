@@ -16,13 +16,15 @@ def net_balances(expenses, user_id, payments=()):
     for expense in expenses:
         total_amount = expense.get("amount")
         payers = expense.get("paid_by") or []
+        paid_details = expense.get("paid_details") or []
         splitters = expense.get("split_on") or []
 
         if not payers or not splitters:
             continue
 
-        num_payers = len(payers)
         num_splitters = len(splitters)
+        paid_amounts = {item.get('user_id'): Decimal(str(item.get('amount', 0))) for item in paid_details}
+        paid_total = sum(paid_amounts.values(), Decimal('0'))
 
         details = expense.get('split_details') or []
         shares = {item.user_id: item.share_amount for item in details if item.share_amount is not None}
@@ -38,7 +40,9 @@ def net_balances(expenses, user_id, payments=()):
             for payer in payers:
                 if splitter == payer:
                     continue
-                split_amount = owed_share_for(splitter) / num_payers
+                contribution = (paid_amounts.get(payer, Decimal(str(total_amount)) / len(payers))
+                                if paid_total else Decimal(str(total_amount)) / len(payers))
+                split_amount = owed_share_for(splitter) * contribution / Decimal(str(total_amount))
 
                 if splitter == user_id:
                     balance[payer] -= split_amount  # user owes others
@@ -91,6 +95,8 @@ def group_expense_data(group_id):
         data.append({
             'amount': expense.amount,
             'paid_by': [p.user_id for p in participants if p.role == ExpenseParticipant.PAID],
+            'paid_details': [{'user_id': p.user_id, 'amount': p.share_amount}
+                             for p in participants if p.role == ExpenseParticipant.PAID and p.share_amount is not None],
             'split_on': [p.user_id for p in participants if p.role == ExpenseParticipant.SPLIT],
             'split_details': [p for p in participants if p.role == ExpenseParticipant.SPLIT],
         })

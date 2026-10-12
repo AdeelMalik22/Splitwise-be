@@ -53,9 +53,8 @@ fun shareOf(expense: Expense, userId: Int): BigDecimal {
 
 /** Positive: [userId] is owed money for this expense; negative: they owe it. */
 fun netFor(expense: Expense, userId: Int): BigDecimal {
-    val paid = if (userId in expense.paidBy) {
-        expense.amount.toMoney().divide(BigDecimal(expense.paidBy.size), 2, RoundingMode.HALF_UP)
-    } else BigDecimal.ZERO
+    val paid = expense.paidDetails.firstOrNull { it.userId == userId }?.amount?.toMoney()
+        ?: if (userId in expense.paidBy) expense.amount.toMoney().divide(BigDecimal(expense.paidBy.size), 2, RoundingMode.HALF_UP) else BigDecimal.ZERO
     return paid - shareOf(expense, userId)
 }
 
@@ -98,7 +97,8 @@ fun spendingFor(expenses: List<Expense>, userId: Int, month: String? = null): Sp
     var paid = BigDecimal.ZERO
     var share = BigDecimal.ZERO
     expenses.filter { month == null || monthKey(it.createdAt) == month }.forEach { e ->
-        if (userId in e.paidBy) paid += e.amount.toMoney().divide(BigDecimal(e.paidBy.size), 2, RoundingMode.HALF_UP)
+        paid += e.paidDetails.firstOrNull { it.userId == userId }?.amount?.toMoney()
+            ?: if (userId in e.paidBy) e.amount.toMoney().divide(BigDecimal(e.paidBy.size), 2, RoundingMode.HALF_UP) else BigDecimal.ZERO
         share += shareOf(e, userId)
     }
     return Spending(paid, share)

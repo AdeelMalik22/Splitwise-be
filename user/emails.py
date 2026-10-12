@@ -66,11 +66,12 @@ def send_email(to, subject, text, html=None):
 def send_verification_email(user, request=None):
     link = f'{public_base_url(request)}/users/verify_email/?token={make_verify_token(user)}'
     name = user.name or user.username
-    text = (f'Hi {name},\n\nWelcome to SplitEase! Confirm your email address to finish creating your account:\n\n{link}\n\n'
+    text = (f'Hi {name},\n\nWelcome to SplitEase! Confirm your email address to finish creating your account. '
+            'Use the “Verify email” button in this message.\n\n'
             'The link works for 3 days. If you did not sign up, you can ignore this email.')
     html = (f'<p>Hi {escape(name)},</p><p>Welcome to SplitEase! Confirm your email address to finish creating your account:</p>'
             f'<p><a href="{escape(link)}" style="background:#0F766E;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none">'
-            'Verify email</a></p><p>Or open this link: ' + escape(link) + '</p><p>The link works for 3 days. '
+            'Verify email</a></p><p>The link works for 3 days. '
             'If you did not sign up, you can ignore this email.</p>')
     return send_email(user.email, 'Verify your SplitEase email', text, html)
 
@@ -97,7 +98,8 @@ def read_reset_token(token):
 def send_reset_email(user, request=None):
     link = f'{public_base_url(request)}/users/reset_password/?token={make_reset_token(user)}'
     name = user.name or user.username
-    text = (f'Hi {name},\n\nSomeone asked to reset the password for your SplitEase account. Choose a new one here:\n\n{link}\n\n'
+    text = (f'Hi {name},\n\nSomeone asked to reset the password for your SplitEase account. '
+            'Use the “Choose a new password” button in this message.\n\n'
             'The link works for 1 hour and only once. If this was not you, ignore this email: your password stays the same.')
     html = (f'<p>Hi {escape(name)},</p><p>Someone asked to reset the password for your SplitEase account.</p>'
             f'<p><a href="{escape(link)}" style="background:#0F766E;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none">'
@@ -110,14 +112,14 @@ def send_invite_email(invite, request=None):
     link = f'{public_base_url(request)}/invite/{invite.token}/'
     who = invite.inviter.name or invite.inviter.username
     text = (f'{who} invited you to join "{invite.group.name}" on SplitEase, the app for sharing expenses with friends.\n\n'
-            f'Open this link on your phone to join:\n{link}\n\n'
+            'Use the “Open invitation” button in this message to join.\n\n'
             f'If you are new, you will be asked to create an account with this email address ({invite.email}). '
             f'The invitation works for {settings.INVITE_MAX_DAYS} days.')
     html = (f'<p><b>{escape(who)}</b> invited you to join <b>{escape(invite.group.name)}</b> on SplitEase.</p>'
             f'<p><a href="{escape(link)}" style="background:#0F766E;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none">'
             'Open invitation</a></p>'
             f'<p>If you are new, create your account with this email address ({escape(invite.email)}). '
-            f'The invitation works for {settings.INVITE_MAX_DAYS} days.</p><p>Or open: {escape(link)}</p>')
+            f'The invitation works for {settings.INVITE_MAX_DAYS} days.</p>')
     return send_email(invite.email, f'{who} invited you to {invite.group.name} on SplitEase', text, html)
 
 

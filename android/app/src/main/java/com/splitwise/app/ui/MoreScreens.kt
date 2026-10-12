@@ -62,7 +62,8 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
     var name by rememberSaveable { mutableStateOf(existing?.name.orEmpty()) }
     var description by rememberSaveable { mutableStateOf(existing?.description.orEmpty()) }
     var amount by rememberSaveable { mutableStateOf(existing?.amount?.toMoney()?.stripTrailingZeros()?.toPlainString().orEmpty()) }
-    var paidBy by rememberSaveable { mutableStateOf<Int?>(existing?.paidBy?.firstOrNull() ?: userId) }
+    var payers by rememberSaveable { mutableStateOf(existing?.paidBy?.toSet() ?: setOfNotNull(userId)) }
+    val paidValues = remember { mutableStateMapOf<Int, String>().apply { existing?.paidDetails?.forEach { put(it.userId, it.amount) } } }
     var splitOn by rememberSaveable(state.groupId) { mutableStateOf<List<Int>?>(existing?.splitOn?.takeIf { it.isNotEmpty() }) }
     var mode by rememberSaveable {
         mutableStateOf(
@@ -82,7 +83,7 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
 
     NavBar(if (existing != null) "Edit Expense" else "Add Expense", onBack) {
         val members = (state.members as? Load.Ready)?.data.orEmpty()
-        SmallButton("Save", { vm.save(name, description, amount, paidBy, SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap())) })
+        SmallButton("Save", { vm.save(name, description, amount, payers.firstOrNull(), SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap(), payers, paidValues.toMap())) })
     }
     if (groups.isEmpty() && existing == null) return EmptyState("Create a group first, then add expenses to it.")
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -103,7 +104,7 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
         if (existing == null) {
             Text("Group", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                groups.forEach { g -> SelectChip("${g.emoji()}  ${g.name}", selected = g.id == state.groupId) { vm.selectGroup(g.id); paidBy = userId; values.clear() } }
+                groups.forEach { g -> SelectChip("${g.emoji()}  ${g.name}", selected = g.id == state.groupId) { vm.selectGroup(g.id); payers = setOfNotNull(userId); values.clear() } }
             }
         }
 
@@ -116,9 +117,19 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
                 else -> total.divide(BigDecimal(selected.size), 2, RoundingMode.HALF_UP).toPlainString()
             }
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Paid by", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
+                Text("Paid by (select one or more)", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    members.forEach { m -> PersonPick(m.id, initials(m.name, m.username), if (m.id == userId) "You" else m.username, paidBy == m.id, m.avatar) { paidBy = m.id } }
+                    members.forEach { m -> PersonPick(m.id, initials(m.name, m.username), if (m.id == userId) "You" else m.username, m.id in payers, m.avatar) {
+                        payers = if (m.id in payers) payers - m.id else payers + m.id
+                    } }
+                }
+                if (payers.size > 1) {
+                    Text("How much did each person pay?", color = c.fg2, style = MaterialTheme.typography.bodySmall)
+                    members.filter { it.id in payers }.forEach { m ->
+                        OutlinedTextField(paidValues[m.id].orEmpty(), { v -> if (v.matches(Regex("\\d{0,9}([.]\\d{0,2})?"))) paidValues[m.id] = v },
+                            label = { Text(if (m.id == userId) "You paid" else "${m.username} paid") }, singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+                    }
                 }
                 Text("Split between", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -173,7 +184,7 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
         }
         PrimaryButton(if (existing != null) "Save changes" else "Save expense", {
             val members = (state.members as? Load.Ready)?.data.orEmpty()
-            vm.save(name, description, amount, paidBy, SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap()))
+            vm.save(name, description, amount, payers.firstOrNull(), SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap(), payers, paidValues.toMap()))
         }, busy = state.busy)
         Spacer(Modifier.height(16.dp))
     }
