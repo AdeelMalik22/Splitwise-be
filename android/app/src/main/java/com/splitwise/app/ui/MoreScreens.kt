@@ -446,7 +446,7 @@ fun AccountScreen(
         }
         SectionHeader("Account")
         SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
-            NavRow("Edit Profile", "Name and email", onEditProfile)
+            NavRow("Edit Profile", "Name only", onEditProfile)
             Divider16()
             NavRow("Change Password", "Update your password", onChangePassword)
             Divider16()

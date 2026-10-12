@@ -150,14 +150,14 @@ private fun PaymentRow(p: Payment, userId: Int?, onConfirm: (Payment) -> Unit, o
 fun EditProfileScreen(overview: Overview, onSave: (Int, String, String) -> Unit, onBack: () -> Unit) {
     val me = overview.me ?: return
     var name by rememberSaveable { mutableStateOf(me.name) }
-    var email by rememberSaveable { mutableStateOf(me.email) }
     Column(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
         NavBar("Edit Profile", onBack)
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             IconField(name, { name = it }, "Full Name", androidx.compose.material.icons.Icons.Default.Person)
-            IconField(email, { email = it }, "Email", androidx.compose.material.icons.Icons.Default.Email, keyboard = androidx.compose.ui.text.input.KeyboardType.Email)
-            Text("Username @${me.username} can't be changed.", color = MaterialTheme.split.fg3, style = MaterialTheme.typography.bodySmall)
-            PrimaryButton("Save changes", { onSave(me.id, name, email) }, enabled = name.isNotBlank() && email.isNotBlank())
+            Text("Email", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.split.fg2)
+            Text(me.email, style = MaterialTheme.typography.bodyLarge)
+            Text("Username @${me.username} and email can't be changed.", color = MaterialTheme.split.fg3, style = MaterialTheme.typography.bodySmall)
+            PrimaryButton("Save changes", { onSave(me.id, name, me.email) }, enabled = name.isNotBlank())
         }
     }
 }

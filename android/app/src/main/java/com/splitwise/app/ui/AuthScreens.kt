@@ -96,10 +96,6 @@ private fun LoginForm(vm: AuthViewModel, justVerified: Boolean, onRegister: () -
             onInvalidated = vm::biometricInvalidated,
         )
     }
-    // Ask for the fingerprint once when the app opens signed out.
-    var prompted by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(fingerprint != null) { if (fingerprint != null && !prompted && !justVerified) { prompted = true; unlockWithFingerprint() } }
-
     Column(
         Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).imePadding(),
     ) {

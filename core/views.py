@@ -28,7 +28,7 @@ class GroupViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Group.objects.filter(usergroup__user_id=self.request.user.pk).order_by('id')
+        return Group.objects.filter(usergroup__user_id=self.request.user.pk).select_related('created_by').order_by('id')
 
     def perform_create(self, serializer):
         group = serializer.save(created_by=self.request.user)
@@ -89,6 +89,7 @@ class GroupViewSet(viewsets.ModelViewSet):
         removed, _ = UserGroup.objects.filter(group_id=group, user_id=user_id).delete()
         if not removed:
             return Response({'detail': 'Not a member of this group.'}, status=status.HTTP_404_NOT_FOUND)
+        cache.delete(f'group-members-{group.pk}')
         log_activity(request.user, 'removed', 'member', user_id, group=group,
                      member=target.username if target else str(user_id))
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -100,32 +101,41 @@ class UserGroupViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return UserGroup.objects.filter(user_id=self.request.user.pk)
+        return UserGroup.objects.filter(user_id=self.request.user.pk).select_related('group_id')
+
+    @staticmethod
+    def _invalidate_members(group_id):
+        cache.delete(f'group-members-{group_id}')
 
     def perform_create(self, serializer):
         membership = serializer.save()
+        self._invalidate_members(membership.group_id_id)
         log_activity(self.request.user, 'joined', 'group', membership.group_id_id, group=membership.group_id)
 
     def perform_destroy(self, instance):
         group = instance.group_id
         instance.delete()
+        self._invalidate_members(group.pk)
         log_activity(self.request.user, 'left', 'group', group.pk, group=group)
 
     @action(detail=True, methods=['get'], url_path="users")
     def get_group_users(self, request, pk=None):
         if not self.get_queryset().filter(group_id=pk).exists():
             return Response({'detail': 'Not permitted.'}, status=status.HTTP_403_FORBIDDEN)
-        user_groups = UserGroup.objects.filter(group_id=pk).values('user_id')
+        cached = cache.get(f'group-members-{pk}')
+        if cached is not None:
+            return Response(cached, status=status.HTTP_200_OK)
 
-        if not user_groups.exists():
+        memberships = UserGroup.objects.filter(group_id=pk).select_related('user_id').order_by('user_id_id')
+        if not memberships.exists():
             return Response({"detail": "No users found for this group."}, status=status.HTTP_404_NOT_FOUND)
 
-        user_ids = [ug['user_id'] for ug in user_groups]
         users = [
-            {'id': u.id, 'username': u.username, 'name': u.name,
-             'avatar': request.build_absolute_uri(u.avatar.url) if u.avatar else None}
-            for u in User.objects.filter(id__in=user_ids).order_by('id')
+            {'id': membership.user_id.id, 'username': membership.user_id.username, 'name': membership.user_id.name,
+             'avatar': request.build_absolute_uri(membership.user_id.avatar.url) if membership.user_id.avatar else None}
+            for membership in memberships
         ]
+        cache.set(f'group-members-{pk}', users, timeout=300)
 
         return Response(users, status=status.HTTP_200_OK)
 
@@ -137,7 +147,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Expense.objects.filter(group_id__usergroup__user_id=self.request.user.pk)
+        return Expense.objects.filter(group_id__usergroup__user_id=self.request.user.pk).select_related('group_id').prefetch_related('participants')
 
     @staticmethod
     def _invalidate_cache(group_id):
@@ -248,7 +258,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Notification.objects.filter(recipient=self.request.user)
+        return Notification.objects.filter(recipient=self.request.user).order_by('-created_at', '-id')
 
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):

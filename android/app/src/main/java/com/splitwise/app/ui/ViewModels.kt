@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 
@@ -213,7 +214,12 @@ class OverviewViewModel(private val repo: Repository) : ViewModel() {
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
-    init { refresh() }
+    init {
+        viewModelScope.launch {
+            repo.cachedOverview()?.let { _state.value = Load.Ready(it.toOverview()) }
+            refresh(silent = true)
+        }
+    }
 
     /** Pull-to-refresh: shows the spinner until the reload finishes. */
     fun pullRefresh() = refresh(silent = true, showSpinner = true)
@@ -229,34 +235,48 @@ class OverviewViewModel(private val repo: Repository) : ViewModel() {
     private suspend fun load(silent: Boolean) {
         kotlinx.coroutines.coroutineScope {
             if (!silent && _state.value !is Load.Ready) _state.value = Load.Loading
-            val groupsResult = repo.groups()
-            val groups = groupsResult.getOrElse {
-                if (!(silent && _state.value is Load.Ready)) _state.value = Load.Error(it.userMessage())
-                return@coroutineScope
-            }
+            // These requests do not depend on the groups list, so start them while groups loads.
+            val groupsDeferred = async { repo.groups() }
             val me = async { repo.profile().getOrNull() }
-            val balances = async { repo.balances(groups) }
-            val members = groups.map { g -> g.id to async { repo.members(g.id).getOrDefault(emptyList()) } }
             val invites = async { repo.invites().getOrDefault(emptyList()) }
             val notifications = async { repo.notifications().getOrDefault(emptyList()) }
             val activity = async { repo.activity().getOrDefault(emptyList()) }
             val payments = async { repo.payments().getOrDefault(emptyList()) }
             val expenses = async { repo.allExpenses().getOrDefault(emptyList()) }
-            _state.value = Load.Ready(
-                Overview(
+            val groupsResult = groupsDeferred.await()
+            val groups = groupsResult.getOrElse {
+                if (!(silent && _state.value is Load.Ready)) {
+                    // Avoid flashing an error for a transient connection hiccup.
+                    kotlinx.coroutines.delay(750)
+                    _state.value = Load.Error(it.userMessage())
+                }
+                return@coroutineScope
+            }
+            val balances = async { repo.balances(groups) }
+            val members = groups.map { g -> g.id to async { repo.members(g.id).getOrDefault(emptyList()) } }
+            val overview = Overview(
                     me = me.await(), groups = groups, balances = balances.await(),
                     members = members.associate { (id, d) -> id to d.await() },
                     invites = invites.await(), notifications = notifications.await(), activity = activity.await(),
                     payments = payments.await(), expenses = expenses.await(),
-                )
             )
+            _state.value = Load.Ready(overview)
+            val userId = repo.userId.first()
+            if (userId != null) repo.cacheOverview(overview.toSnapshot(userId))
         }
     }
+
+    private fun OverviewSnapshot.toOverview() = Overview(me = profile, groups = groups, balances = balances,
+        members = members, invites = invites, notifications = notifications, activity = activity,
+        payments = payments, expenses = expenses)
+
+    private fun Overview.toSnapshot(userId: Int) = OverviewSnapshot(userId, me, groups, balances, members,
+        invites, notifications, activity, payments, expenses)
 
     fun createGroup(name: String, description: String, icon: String, onDone: () -> Unit) {
         viewModelScope.launch {
             repo.createGroup(name, description, icon).fold(
-                { refresh(silent = true); onDone() },
+                { group -> addGroup(group); onDone() },
                 { _message.value = it.userMessage() },
             )
         }
@@ -265,14 +285,37 @@ class OverviewViewModel(private val repo: Repository) : ViewModel() {
     fun respond(invite: Invite, accept: Boolean) {
         viewModelScope.launch {
             repo.respondToInvite(invite.id, accept).fold(
-                { refresh(silent = true) },
+                { updated -> updateInvite(updated) },
                 { _message.value = it.userMessage() },
             )
         }
     }
 
     fun markRead(n: AppNotification) {
-        viewModelScope.launch { repo.markRead(n.id).onSuccess { refresh(silent = true) } }
+        viewModelScope.launch { repo.markRead(n.id).onSuccess { updateNotification(n.id) } }
+    }
+
+    private fun addGroup(group: Group) {
+        val current = (_state.value as? Load.Ready)?.data ?: return
+        _state.value = Load.Ready(current.copy(
+            groups = (current.groups + group).distinctBy { it.id },
+            balances = current.balances + (group.id to Settlements()),
+            members = current.members + (group.id to emptyList()),
+        ))
+    }
+
+    private fun updateInvite(updated: Invite) {
+        val current = (_state.value as? Load.Ready)?.data ?: return
+        _state.value = Load.Ready(current.copy(
+            invites = current.invites.map { if (it.id == updated.id) updated else it },
+        ))
+    }
+
+    private fun updateNotification(id: Int) {
+        val current = (_state.value as? Load.Ready)?.data ?: return
+        _state.value = Load.Ready(current.copy(
+            notifications = current.notifications.map { if (it.id == id) it.copy(readAt = it.readAt ?: "read") else it },
+        ))
     }
 
     fun messageShown() { _message.value = null }
@@ -340,6 +383,7 @@ class GroupDetailViewModel(private val repo: Repository, private val groupId: In
     /** [silent] polls in the background: failures keep the data already on screen. */
     fun refresh(silent: Boolean = false) {
         viewModelScope.launch {
+            if (silent) _state.update { it.copy(refreshing = true) }
             val e = async { repo.expenses(groupId) }
             val s = async { repo.settlements(groupId) }
             val m = async { repo.members(groupId) }

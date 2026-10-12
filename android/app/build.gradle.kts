@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -25,9 +26,11 @@ android {
         }
         release {
             isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Override for your deployment; release builds must use HTTPS.
-            buildConfigField("String", "API_BASE_URL", "\"https://api.example.com/\"")
+            val apiBaseUrl = providers.gradleProperty("apiBaseUrl").orElse("https://api.example.com/").get()
+            buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         }
     }
 
@@ -56,6 +59,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("androidx.navigation:navigation-compose:2.9.4")
     implementation("androidx.datastore:datastore-preferences:1.1.7")
+    implementation("androidx.room:room-runtime:2.7.2")
+    implementation("androidx.room:room-ktx:2.7.2")
+    ksp("androidx.room:room-compiler:2.7.2")
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")

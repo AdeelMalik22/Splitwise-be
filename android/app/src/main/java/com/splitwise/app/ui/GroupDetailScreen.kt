@@ -75,7 +75,7 @@ fun GroupDetailScreen(
     ) { padding ->
         Column(Modifier.padding(padding).systemBarsPadding().fillMaxSize()) {
             NavBar(title, onBack) {
-                IconButton(onClick = { vm.refresh() }) { Icon(Icons.Default.Refresh, "Refresh", tint = MaterialTheme.split.fg2) }
+                IconButton(onClick = { vm.refresh(silent = true) }) { Icon(Icons.Default.Refresh, "Refresh", tint = MaterialTheme.split.fg2) }
                 Box {
                     IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "More", tint = MaterialTheme.split.fg2) }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {

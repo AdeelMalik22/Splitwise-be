@@ -6,6 +6,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -48,7 +49,7 @@ private suspend fun <T> call(block: suspend () -> T): Result<T> = try {
     Result.failure(e)
 }
 
-class Repository(private val tokens: TokenStore, private val clients: ApiClients) {
+class Repository(private val tokens: TokenStore, private val clients: ApiClients, private val overviewCache: OverviewCache, @PublishedApi internal val dataCache: DataCache) {
     private val api get() = clients.api
 
     val loggedIn: Flow<Boolean> = tokens.loggedIn
@@ -79,7 +80,13 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
 
     suspend fun resendVerification(identifier: String) = call { clients.auth.resendVerification(IdentifierRequest(identifier.trim())) }
 
-    suspend fun logout() = tokens.clear()
+    suspend fun logout() {
+        tokens.userId.first()?.let { overviewCache.delete(it); dataCache.deleteUser(it) }
+        tokens.clear()
+    }
+
+    suspend fun cachedOverview(): OverviewSnapshot? = tokens.userId.first()?.let { overviewCache.get(it) }
+    suspend fun cacheOverview(snapshot: OverviewSnapshot) = overviewCache.put(snapshot)
 
     val biometric = tokens.biometric
     val biometricOffered = tokens.biometricOffered
@@ -103,7 +110,11 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
         tokens.save(fresh.access, fresh.refresh ?: refresh)
     }
 
-    suspend fun groups() = call { api.groups().results }
+    @PublishedApi internal suspend fun uid() = tokens.userId.first()
+    @PublishedApi internal suspend inline fun <reified T> cached(kind: String, key: String = "") = uid()?.let { dataCache.get<T>(it, kind, key) }
+    @PublishedApi internal suspend inline fun <reified T> save(kind: String, value: T, key: String = "") { uid()?.let { dataCache.put(it, kind, value, key) } }
+
+    suspend fun groups() = call { api.groups().results.also { save("groups", it) } }.recoverCatching { cached<List<Group>>("groups") ?: throw it }
     suspend fun createGroup(name: String, description: String, icon: String = "") =
         call { api.createGroup(GroupRequest(name.trim(), description.trim(), icon)) }
     suspend fun updateGroup(id: Int, name: String, description: String, icon: String) =
@@ -119,13 +130,11 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     suspend fun deleteGroup(id: Int) = call { api.deleteGroup(id) }
     suspend fun removeMember(groupId: Int, userId: Int) = call { api.removeMember(groupId, userId) }
 
-    suspend fun members(groupId: Int) = call { api.members(groupId) }
+    suspend fun members(groupId: Int) = call { api.members(groupId).also { save("members", it, groupId.toString()) } }.recoverCatching { cached<List<Member>>("members", groupId.toString()) ?: throw it }
 
-    suspend fun expenses(groupId: Int) = call {
-        api.expenses().filter { it.groupId == groupId }.sortedByDescending { it.createdAt }
-    }
+    suspend fun expenses(groupId: Int) = call { api.expenses().filter { it.groupId == groupId }.sortedByDescending { it.createdAt }.also { save("expenses", it, groupId.toString()) } }.recoverCatching { cached<List<Expense>>("expenses", groupId.toString()) ?: throw it }
 
-    suspend fun allExpenses() = call { api.expenses() }
+    suspend fun allExpenses() = call { api.expenses().also { save("expenses_all", it) } }.recoverCatching { cached<List<Expense>>("expenses_all") ?: throw it }
     suspend fun createExpense(request: ExpenseRequest) = call { api.createExpense(request) }
     suspend fun expense(id: Int) = call { api.expense(id) }
     suspend fun updateExpense(id: Int, request: ExpenseRequest) = call { api.updateExpense(id, request) }
@@ -149,7 +158,7 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     val pendingInvite: Flow<String?> = tokens.pendingInvite
     suspend fun setPendingInvite(token: String?) = tokens.setPendingInvite(token)
 
-    suspend fun invites() = call { api.invites().results }
+    suspend fun invites() = call { api.invites().results.also { save("invites", it) } }.recoverCatching { cached<List<Invite>>("invites") ?: throw it }
     suspend fun respondToInvite(id: Int, accept: Boolean) = call {
         if (accept) api.acceptInvite(id) else api.declineInvite(id)
     }
@@ -162,7 +171,7 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
         api.leaveGroup(membership.id)
     }
 
-    suspend fun payments() = call { api.payments().results }
+    suspend fun payments() = call { api.payments().results.also { save("payments", it) } }.recoverCatching { cached<List<Payment>>("payments") ?: throw it }
     suspend fun createPayment(groupId: Int, payeeId: Int, amount: String) = call { api.createPayment(PaymentRequest(groupId, payeeId, amount)) }
     suspend fun confirmPayment(id: Int) = call { api.confirmPayment(id) }
     suspend fun cancelPayment(id: Int) = call { api.cancelPayment(id) }
@@ -171,17 +180,20 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     suspend fun changePassword(old: String, new: String) = call { api.changePassword(ChangePasswordRequest(old, new)) }
     suspend fun deleteAccount(password: String) = call {
         api.deleteAccount(DeleteAccountRequest(password))
+        tokens.userId.first()?.let { overviewCache.delete(it) }
         tokens.clearBiometric()
         tokens.clear()
     }
 
-    suspend fun profile() = call { api.profile().results.first() }
-    suspend fun activity() = call { api.activity().results }
+    suspend fun profile() = call { api.profile().results.first().also { save("profile", it) } }.recoverCatching { cached<Profile>("profile") ?: throw it }
+    suspend fun activity() = call { api.activity().results.also { save("activity", it) } }.recoverCatching { cached<List<ActivityItem>>("activity") ?: throw it }
 
     /** Settlements for every group at once; groups whose request fails are left out. */
     suspend fun balances(groups: List<Group>): Map<Int, Settlements> = coroutineScope {
-        groups.map { g -> async { g.id to api.runCatchingSettlements(g.id) } }.awaitAll()
+        val fresh = groups.map { g -> async { g.id to api.runCatchingSettlements(g.id) } }.awaitAll()
             .mapNotNull { (id, r) -> r?.let { id to it } }.toMap()
+        if (fresh.isNotEmpty()) save("balances", fresh)
+        fresh.ifEmpty { cached<Map<Int, Settlements>>("balances") ?: emptyMap() }
     }
 
     private suspend fun SplitwiseApi.runCatchingSettlements(id: Int): Settlements? = try {
@@ -194,6 +206,6 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
         null
     }
 
-    suspend fun notifications() = call { api.notifications().results }
+    suspend fun notifications() = call { api.notifications().results.also { save("notifications", it) } }.recoverCatching { cached<List<AppNotification>>("notifications") ?: throw it }
     suspend fun markRead(id: Int) = call { api.markRead(id) }
 }

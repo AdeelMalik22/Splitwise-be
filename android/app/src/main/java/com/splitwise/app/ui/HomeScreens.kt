@@ -320,7 +320,7 @@ fun GroupBadge(emoji: String, imageUrl: String?, size: androidx.compose.ui.unit.
     Box(modifier.size(size).clip(RoundedCornerShape(size / 4)).background(MaterialTheme.split.primaryBg), contentAlignment = Alignment.Center) {
         Text(emoji, fontSize = (size.value / 2).sp)
         if (!imageUrl.isNullOrBlank()) {
-            coil3.compose.AsyncImage(model = imageUrl, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            coil3.compose.AsyncImage(model = cachedImageRequest(imageUrl), contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
     }
 }

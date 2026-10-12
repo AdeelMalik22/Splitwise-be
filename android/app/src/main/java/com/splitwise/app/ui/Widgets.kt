@@ -28,11 +28,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.splitwise.app.data.Member
+import coil3.request.ImageRequest
 
 private val avatarColors = listOf(
     Color(0xFF0F766E), Color(0xFF2563EB), Color(0xFF7C3AED), Color(0xFFBE123C), Color(0xFFB45309), Color(0xFF475569),
 )
+
+@Composable
+fun cachedImageRequest(url: String): ImageRequest = ImageRequest.Builder(LocalContext.current)
+    .data(url)
+    .memoryCacheKey(url)
+    .diskCacheKey(url)
+    .build()
 
 /** Initials on a colour; the profile picture, when there is one, is drawn over them once it loads. */
 @Composable
@@ -43,7 +52,7 @@ fun Avatar(label: String, colorKey: Int, size: Dp = 40.dp, modifier: Modifier = 
     ) {
         Text(label, color = Color.White, fontSize = (size.value * 0.34f).sp, fontWeight = FontWeight.SemiBold)
         if (!imageUrl.isNullOrBlank()) {
-            coil3.compose.AsyncImage(model = imageUrl, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            coil3.compose.AsyncImage(model = cachedImageRequest(imageUrl), contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
     }
 }
