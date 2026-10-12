@@ -233,6 +233,8 @@ private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId
     var payer by rememberSaveable { mutableStateOf<Int?>(null) }
     var month by rememberSaveable { mutableStateOf("all") }
     var minimum by rememberSaveable { mutableStateOf("") }
+    var showFilters by rememberSaveable { mutableStateOf(true) }
+    var showCategories by rememberSaveable { mutableStateOf(true) }
     val filtered = expenses.filter { e ->
         (query.isBlank() || e.name.contains(query, true) || e.description.contains(query, true)) &&
             (category == "all" || e.category == category) &&
@@ -241,27 +243,37 @@ private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId
             (minimum.toBigDecimalOrNull()?.let { e.amount.toMoney() >= it } != false)
     }
     Column {
-        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            label = { Text("Search expenses") }, singleLine = true)
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("all" to "All", "food" to "Food", "travel" to "Travel", "rent" to "Rent", "entertainment" to "Fun", "other" to "Other").forEach { (value, label) ->
-                FilterChip(selected = category == value, onClick = { category = value }, label = { Text(label) })
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(query, { query = it }, Modifier.weight(1f), label = { Text("Search expenses") }, singleLine = true)
+            TextButton(onClick = { showFilters = !showFilters }) { Text(if (showFilters) "Hide filters" else "Filters") }
+        }
+        if (showFilters && showCategories) {
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("all" to "All", "food" to "Food", "travel" to "Travel", "rent" to "Rent", "entertainment" to "Fun", "other" to "Other").forEach { (value, label) ->
+                    FilterChip(selected = category == value, onClick = { category = value }, label = { Text(label) })
+                }
+                TextButton(onClick = { showCategories = false }) { Text("Hide category") }
             }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = payer == null, onClick = { payer = null }, label = { Text("Any payer") })
-            names.values.forEach { member -> FilterChip(selected = payer == member.id, onClick = { payer = member.id }, label = { Text(member.username) }) }
-            FilterChip(selected = month == "all", onClick = { month = "all" }, label = { Text("Any month") })
-            expenses.map { monthKey(it.createdAt) }.distinct().sortedDescending().forEach { value ->
-                FilterChip(selected = month == value, onClick = { month = value }, label = { Text(value) })
+        if (showFilters) {
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = payer == null, onClick = { payer = null }, label = { Text("Any payer") })
+                names.values.forEach { member -> FilterChip(selected = payer == member.id, onClick = { payer = member.id }, label = { Text(member.username) }) }
+                FilterChip(selected = month == "all", onClick = { month = "all" }, label = { Text("Any month") })
+                expenses.map { monthKey(it.createdAt) }.distinct().sortedDescending().forEach { value ->
+                    FilterChip(selected = month == value, onClick = { month = value }, label = { Text(value) })
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(minimum, { value -> if (value.matches(Regex("\\d{0,9}([.]\\d{0,2})?"))) minimum = value },
+                    Modifier.weight(1f), label = { Text("Minimum amount") }, singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal))
+                if (!showCategories) TextButton(onClick = { showCategories = true }) { Text("Show category") }
             }
         }
-        OutlinedTextField(minimum, { value -> if (value.matches(Regex("\\d{0,9}([.]\\d{0,2})?"))) minimum = value },
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), label = { Text("Minimum amount") }, singleLine = true,
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal))
         val byDay = filtered.groupBy { dayLabel(it.createdAt) }
         if (filtered.isEmpty()) { EmptyState("No matching expenses."); return@Column }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
+    LazyColumn(Modifier.fillMaxWidth().weight(1f), contentPadding = PaddingValues(bottom = 96.dp)) {
         byDay.forEach { (day, list) ->
             item(key = "d$day") { Text(day, Modifier.padding(16.dp, 14.dp, 16.dp, 6.dp), color = c.fg2, style = MaterialTheme.typography.titleSmall) }
             items(list, key = { it.id }) { e ->
