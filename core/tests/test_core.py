@@ -4,13 +4,21 @@ from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from core.settlements import get_settlements_for_group
+from core.settlements import get_settlements_for_group, minimize_settlements
 from core.views import GroupViewSet
 from core.models import Group, UserGroup
 from user.models import User
 
 
 class SettlementTests(SimpleTestCase):
+    def test_multiple_payers_keep_their_real_contributions(self):
+        expenses = [{'amount': 600, 'paid_by': [1, 2],
+                     'paid_details': [{'user_id': 1, 'amount': 200}, {'user_id': 2, 'amount': 400}],
+                     'split_on': [1, 2, 3]}]
+        self.assertEqual(minimize_settlements(expenses), [
+            {'from_user': 3, 'to_user': 2, 'amount': 200},
+        ])
+
     @patch('core.settlements.get_username', side_effect=lambda user_id: f'user-{user_id}')
     def test_settlements_split_expense_between_two_users(self, get_username):
         expenses = [{
