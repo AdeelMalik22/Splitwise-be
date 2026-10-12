@@ -191,6 +191,8 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pend
                 TabFrame(load, refreshing, overviewVm::pullRefresh, overviewVm::refresh) {
                     AccountScreen(
                         it, isDark, session::setDarkMode, alertsOn, session::setAlertsOn, session::logout,
+                        onReports = { nav.navigate("reports") },
+                        onLogoutAll = session::logoutAll,
                         currency = activeCurrency, onCurrencyChange = { c -> session.setCurrency(c.code) },
                         onPickPhoto = pickAvatar, onRemovePhoto = overviewVm::removeAvatar,
                         fingerprint = Biometric.state(androidx.compose.ui.platform.LocalContext.current),
@@ -202,6 +204,9 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pend
                         onDeleteAccount = overviewVm::deleteAccount,
                     )
                 }
+            }
+            composable("reports") {
+                ReportsScreen((load as? Load.Ready)?.data ?: Overview(null, emptyList(), emptyMap(), emptyMap(), emptyList(), emptyList(), emptyList()), onBack = { nav.popBackStack() })
             }
             composable(
                 "group/{id}?name={name}",

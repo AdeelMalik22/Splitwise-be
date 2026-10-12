@@ -88,7 +88,23 @@ def get_settlements_for_group(expenses, user_id, payments=()):
 def minimize_settlements(expenses, payments=()):
     """Return a small set of transfers that settles the group's net balances."""
     users = sorted({uid for e in expenses for uid in (e.get('paid_by') or []) + (e.get('split_on') or [])})
-    nets = {uid: sum((net_balances(expenses, uid, payments).values()), Decimal('0')) for uid in users}
+    nets = {uid: Decimal('0') for uid in users}
+    for expense in expenses:
+        total = Decimal(str(expense['amount']))
+        payers = expense.get('paid_by') or []
+        paid = {item.get('user_id'): Decimal(str(item.get('amount', 0))) for item in expense.get('paid_details', [])}
+        if not paid:
+            paid = {uid: total / len(payers) for uid in payers}
+        for uid, value in paid.items(): nets[uid] += value
+        splitters = expense.get('split_on') or []
+        details = expense.get('split_details') or []
+        def detail_value(item, name, fallback=None):
+            return getattr(item, name, item.get(name, fallback) if isinstance(item, dict) else fallback)
+        shares = {detail_value(item, 'user_id'): Decimal(str(detail_value(item, 'share_amount', detail_value(item, 'amount', 0)) or 0)) for item in details}
+        for uid in splitters: nets[uid] -= shares.get(uid, total / len(splitters))
+    for payment in payments:
+        amount = Decimal(str(payment['amount']))
+        nets[payment['payer']] += amount; nets[payment['payee']] -= amount
     creditors = [[uid, amount.quantize(Decimal('0.01'))] for uid, amount in nets.items() if amount > 0]
     debtors = [[uid, (-amount).quantize(Decimal('0.01'))] for uid, amount in nets.items() if amount < 0]
     transfers = []

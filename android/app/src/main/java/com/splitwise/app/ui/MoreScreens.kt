@@ -395,8 +395,8 @@ fun ActivityScreen(overview: Overview, onMarkRead: (com.splitwise.app.data.AppNo
 
 @Composable
 fun AccountScreen(
-    overview: Overview, dark: Boolean, onDarkChange: (Boolean) -> Unit, alertsOn: Boolean, onAlertsChange: (Boolean) -> Unit, onLogout: () -> Unit,
-    onEditProfile: () -> Unit, onChangePassword: () -> Unit, onPayments: () -> Unit, onDeleteAccount: (String) -> Unit,
+    overview: Overview, dark: Boolean, onDarkChange: (Boolean) -> Unit, alertsOn: Boolean, onAlertsChange: (Boolean) -> Unit, onLogout: () -> Unit, onReports: () -> Unit = {},
+    onEditProfile: () -> Unit, onChangePassword: () -> Unit, onPayments: () -> Unit, onLogoutAll: () -> Unit = {}, onDeleteAccount: (String) -> Unit,
     fingerprint: BiometricState = BiometricState.Unavailable, fingerprintOn: Boolean = false, onFingerprintChange: (Boolean) -> Unit = {},
     currency: Currency = activeCurrency, onCurrencyChange: (Currency) -> Unit = {},
     onPickPhoto: () -> Unit = {}, onRemovePhoto: () -> Unit = {},
@@ -472,7 +472,11 @@ fun AccountScreen(
             Divider16()
             NavRow("Change Password", "Update your password", onChangePassword)
             Divider16()
+            NavRow("Log out all devices", "Revoke other active sessions", onLogoutAll, danger = true)
+            Divider16()
             NavRow("Payment History", "Payments you sent and received", onPayments)
+            Divider16()
+            NavRow("Spending reports", "Monthly totals by category", onReports)
         }
         SectionHeader("Danger Zone")
         SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
@@ -551,4 +555,24 @@ private fun DeleteAccountDialog(onDismiss: () -> Unit, onConfirm: (String) -> Un
         confirmButton = { TextButton(onClick = { onConfirm(password) }, enabled = password.isNotEmpty()) { Text("Yes, delete my account", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+@Composable
+fun ReportsScreen(overview: Overview, onBack: () -> Unit) {
+    val monthly = overview.expenses.groupBy { monthKey(it.createdAt) }.mapValues { it.value.sumOf { e -> e.amount.toMoney() } }.toList().sortedByDescending { it.first }
+    val categories = overview.expenses.groupBy { it.category }.mapValues { it.value.sumOf { e -> e.amount.toMoney() } }.toList().sortedByDescending { it.second }
+    val max = monthly.maxOfOrNull { it.second } ?: BigDecimal.ONE
+    Column(Modifier.fillMaxSize().systemBarsPadding()) {
+        NavBar("Spending reports", onBack)
+        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item { Text("Monthly spending", style = MaterialTheme.typography.titleLarge) }
+            items(monthly) { (month, total) ->
+                Column { Text("$month · ${formatRs(total, true)}", style = MaterialTheme.typography.bodyMedium)
+                    LinearProgressIndicator((total.divide(max, 2, java.math.RoundingMode.HALF_UP)).toFloat(), Modifier.fillMaxWidth().padding(top = 6.dp)) }
+            }
+            item { Text("By category", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.titleLarge) }
+            items(categories) { (category, total) -> Text("${category.replaceFirstChar { it.uppercase() }} · ${formatRs(total, true)}", style = MaterialTheme.typography.bodyLarge) }
+            if (monthly.isEmpty()) item { EmptyState("Add expenses to see reports.") }
+        }
+    }
 }

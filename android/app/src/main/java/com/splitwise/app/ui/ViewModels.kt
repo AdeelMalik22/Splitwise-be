@@ -154,6 +154,7 @@ class SessionViewModel(private val repo: Repository) : ViewModel() {
     fun setAlertsOn(on: Boolean) { viewModelScope.launch { repo.setAlertsOn(on) } }
     fun setDarkMode(dark: Boolean) { viewModelScope.launch { repo.setDarkMode(dark) } }
     fun logout() { viewModelScope.launch { repo.logout() } }
+    fun logoutAll() { viewModelScope.launch { repo.logoutAll().onSuccess { repo.logout() } } }
 }
 
 /** Everything the signed-in tabs share, loaded together. */

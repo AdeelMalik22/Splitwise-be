@@ -178,6 +178,7 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
 
     suspend fun updateProfile(id: Int, name: String, email: String) = call { api.updateProfile(id, ProfileUpdate(name.trim(), email.trim())) }
     suspend fun changePassword(old: String, new: String) = call { api.changePassword(ChangePasswordRequest(old, new)) }
+    suspend fun logoutAll() = call { api.logoutAll() }
     suspend fun deleteAccount(password: String) = call {
         api.deleteAccount(DeleteAccountRequest(password))
         tokens.userId.first()?.let { overviewCache.delete(it) }

@@ -55,6 +55,7 @@ interface SplitwiseApi {
     @DELETE("users/avatar/") suspend fun removeAvatar(): Profile
     @PATCH("users/{id}/") suspend fun updateProfile(@Path("id") id: Int, @Body body: ProfileUpdate): Profile
     @POST("users/change_password/") suspend fun changePassword(@Body body: ChangePasswordRequest)
+    @POST("users/logout_all/") suspend fun logoutAll()
     @POST("users/delete_account/") suspend fun deleteAccount(@Body body: DeleteAccountRequest)
 
     @GET("users/search/") suspend fun searchUsers(@Query("q") query: String): List<UserSummary>

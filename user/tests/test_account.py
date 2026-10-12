@@ -29,6 +29,13 @@ class AccountManagementTests(APITestCase):
         response = self.client.post('/users/change_password/', {'old_password': 'old-password-1', 'new_password': '12345678'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_logout_all_devices_revokes_sessions(self):
+        old_version = self.user.session_version
+        response = self.client.post('/users/logout_all/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.session_version, old_version + 1)
+
     def test_delete_account_requires_password_and_removes_memberships(self):
         group = Group.objects.create(name='G', description='G')
         UserGroup.objects.create(user_id=self.user, group_id=group)
