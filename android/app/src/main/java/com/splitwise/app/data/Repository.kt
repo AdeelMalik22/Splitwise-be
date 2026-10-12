@@ -16,9 +16,11 @@ import retrofit2.HttpException
 import java.io.IOException
 
 class EmailNotVerifiedException : Exception("Please verify your email address first. Check your inbox for the link.")
+class OfflineQueuedException : IOException("Saved offline. It will sync when you reconnect.")
 
 /** Turns any failure into a user-readable message (DRF error bodies are flattened). */
 fun Throwable.userMessage(): String = when (this) {
+    is OfflineQueuedException -> message ?: "Saved offline. It will sync when you reconnect."
     is HttpException -> {
         val body = runCatching { response()?.errorBody()?.string() }.getOrNull()
         val parsed = body?.let { runCatching { flatten(AppJson.parseToJsonElement(it)) }.getOrNull() }
@@ -49,7 +51,7 @@ private suspend fun <T> call(block: suspend () -> T): Result<T> = try {
     Result.failure(e)
 }
 
-class Repository(private val tokens: TokenStore, private val clients: ApiClients, private val overviewCache: OverviewCache, @PublishedApi internal val dataCache: DataCache) {
+class Repository(private val tokens: TokenStore, private val clients: ApiClients, private val overviewCache: OverviewCache, @PublishedApi internal val dataCache: DataCache, private val writeQueue: OfflineWriteQueue) {
     private val api get() = clients.api
 
     val loggedIn: Flow<Boolean> = tokens.loggedIn
@@ -81,7 +83,7 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     suspend fun resendVerification(identifier: String) = call { clients.auth.resendVerification(IdentifierRequest(identifier.trim())) }
 
     suspend fun logout() {
-        tokens.userId.first()?.let { overviewCache.delete(it); dataCache.deleteUser(it) }
+        tokens.userId.first()?.let { overviewCache.delete(it); dataCache.deleteUser(it); writeQueue.deleteUser(it) }
         tokens.clear()
     }
 
@@ -114,7 +116,33 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     @PublishedApi internal suspend inline fun <reified T> cached(kind: String, key: String = "") = uid()?.let { dataCache.get<T>(it, kind, key) }
     @PublishedApi internal suspend inline fun <reified T> save(kind: String, value: T, key: String = "") { uid()?.let { dataCache.put(it, kind, value, key) } }
 
-    suspend fun groups() = call { api.groups().results.also { save("groups", it) } }.recoverCatching { cached<List<Group>>("groups") ?: throw it }
+    private suspend fun queue(kind: String, payload: Any) {
+        val id = uid() ?: return
+        when (payload) {
+            is ExpenseRequest -> writeQueue.add(id, kind, payload)
+            is PaymentRequest -> writeQueue.add(id, kind, payload)
+        }
+    }
+
+    private suspend fun syncQueuedWrites() {
+        val id = uid() ?: return
+        writeQueue.list(id).forEach { pending ->
+            val success = runCatching {
+                when (pending.kind) {
+                    "expense" -> api.createExpense(writeQueueJson.decodeFromString<ExpenseRequest>(pending.payload))
+                    "payment" -> {
+                        val p = writeQueueJson.decodeFromString<PaymentRequest>(pending.payload)
+                        api.createPayment(p)
+                    }
+                    else -> null
+                }
+            }.isSuccess
+            if (success) writeQueue.remove(pending.id) else return
+        }
+    }
+    private val writeQueueJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; explicitNulls = false }
+
+    suspend fun groups() = call { syncQueuedWrites(); api.groups().results.also { save("groups", it) } }.recoverCatching { cached<List<Group>>("groups") ?: throw it }
     suspend fun createGroup(name: String, description: String, icon: String = "") =
         call { api.createGroup(GroupRequest(name.trim(), description.trim(), icon)) }
     suspend fun updateGroup(id: Int, name: String, description: String, icon: String) =
@@ -135,7 +163,9 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     suspend fun expenses(groupId: Int) = call { api.expenses().filter { it.groupId == groupId }.sortedByDescending { it.createdAt }.also { save("expenses", it, groupId.toString()) } }.recoverCatching { cached<List<Expense>>("expenses", groupId.toString()) ?: throw it }
 
     suspend fun allExpenses() = call { api.expenses().also { save("expenses_all", it) } }.recoverCatching { cached<List<Expense>>("expenses_all") ?: throw it }
-    suspend fun createExpense(request: ExpenseRequest) = call { api.createExpense(request) }
+    suspend fun createExpense(request: ExpenseRequest) = call { api.createExpense(request) }.recoverCatching {
+        if (it is IOException) { queue("expense", request); throw OfflineQueuedException() } else throw it
+    }
     suspend fun expense(id: Int) = call { api.expense(id) }
     suspend fun updateExpense(id: Int, request: ExpenseRequest) = call { api.updateExpense(id, request) }
 
@@ -172,7 +202,9 @@ class Repository(private val tokens: TokenStore, private val clients: ApiClients
     }
 
     suspend fun payments() = call { api.payments().results.also { save("payments", it) } }.recoverCatching { cached<List<Payment>>("payments") ?: throw it }
-    suspend fun createPayment(groupId: Int, payeeId: Int, amount: String) = call { api.createPayment(PaymentRequest(groupId, payeeId, amount)) }
+    suspend fun createPayment(groupId: Int, payeeId: Int, amount: String) = call { api.createPayment(PaymentRequest(groupId, payeeId, amount)) }.recoverCatching {
+        if (it is IOException) { queue("payment", PaymentRequest(groupId, payeeId, amount)); throw OfflineQueuedException() } else throw it
+    }
     suspend fun confirmPayment(id: Int) = call { api.confirmPayment(id) }
     suspend fun cancelPayment(id: Int) = call { api.cancelPayment(id) }
 

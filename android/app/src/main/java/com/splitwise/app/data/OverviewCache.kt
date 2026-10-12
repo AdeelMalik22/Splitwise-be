@@ -47,10 +47,11 @@ interface OverviewCacheDao {
     suspend fun clear()
 }
 
-@Database(entities = [OverviewCacheEntity::class, CachedDataEntity::class], version = 2, exportSchema = false)
+@Database(entities = [OverviewCacheEntity::class, CachedDataEntity::class, PendingWriteEntity::class], version = 3, exportSchema = false)
 abstract class SplitEaseDatabase : RoomDatabase() {
     abstract fun overviewCache(): OverviewCacheDao
     abstract fun cachedData(): CachedDataDao
+    abstract fun pendingWrites(): PendingWriteDao
 }
 
 class OverviewCache(private val dao: OverviewCacheDao) {
@@ -110,4 +111,32 @@ class DataCache(@PublishedApi internal val dao: CachedDataDao) {
     suspend fun deleteUser(userId: Int) = dao.deleteUser(userId)
     suspend fun delete(userId: Int, kind: String, key: String = "") = dao.delete(userId, kind, key)
     suspend fun clear() = dao.clear()
+}
+
+@Entity(tableName = "pending_writes")
+data class PendingWriteEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val userId: Int,
+    val kind: String,
+    val payload: String,
+    val createdAt: Long,
+)
+
+@Dao
+interface PendingWriteDao {
+    @Query("SELECT * FROM pending_writes WHERE userId = :userId ORDER BY id")
+    suspend fun list(userId: Int): List<PendingWriteEntity>
+    @Insert suspend fun add(value: PendingWriteEntity): Long
+    @Query("DELETE FROM pending_writes WHERE id = :id") suspend fun remove(id: Long)
+    @Query("DELETE FROM pending_writes WHERE userId = :userId") suspend fun deleteUser(userId: Int)
+}
+
+class OfflineWriteQueue(@PublishedApi internal val dao: PendingWriteDao) {
+    @PublishedApi internal val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
+    suspend inline fun <reified T> add(userId: Int, kind: String, value: T) {
+        dao.add(PendingWriteEntity(userId = userId, kind = kind, payload = json.encodeToString(value), createdAt = System.currentTimeMillis()))
+    }
+    suspend fun list(userId: Int) = dao.list(userId)
+    suspend fun remove(id: Long) = dao.remove(id)
+    suspend fun deleteUser(userId: Int) = dao.deleteUser(userId)
 }
