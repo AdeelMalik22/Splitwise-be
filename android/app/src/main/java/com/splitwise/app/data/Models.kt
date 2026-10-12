@@ -80,13 +80,13 @@ data class Expense(
 data class ExpenseRequest(
     val name: String,
     val description: String,
-    val category: String = "other",
     val amount: String,
     @SerialName("paid_by") val paidBy: List<Int>,
     @SerialName("paid_details") val paidDetails: List<PaidDetail>? = null,
     @SerialName("split_on") val splitOn: List<Int>? = null,
     @SerialName("split_details") val splitDetails: List<SplitShare>? = null,
     @SerialName("group_id") val groupId: Int,
+    val category: String = "other",
 )
 
 @Serializable data class ExpenseReport(@SerialName("by_category") val byCategory: List<CategoryTotal> = emptyList(), val monthly: List<MonthTotal> = emptyList())
