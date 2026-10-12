@@ -230,9 +230,15 @@ private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId
     val c = MaterialTheme.split
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("all") }
+    var payer by rememberSaveable { mutableStateOf<Int?>(null) }
+    var month by rememberSaveable { mutableStateOf("all") }
+    var minimum by rememberSaveable { mutableStateOf("") }
     val filtered = expenses.filter { e ->
         (query.isBlank() || e.name.contains(query, true) || e.description.contains(query, true)) &&
-            (category == "all" || e.category == category)
+            (category == "all" || e.category == category) &&
+            (payer == null || payer in e.paidBy) &&
+            (month == "all" || monthKey(e.createdAt) == month) &&
+            (minimum.toBigDecimalOrNull()?.let { e.amount.toMoney() >= it } != false)
     }
     Column {
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -242,6 +248,17 @@ private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId
                 FilterChip(selected = category == value, onClick = { category = value }, label = { Text(label) })
             }
         }
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = payer == null, onClick = { payer = null }, label = { Text("Any payer") })
+            names.values.forEach { member -> FilterChip(selected = payer == member.id, onClick = { payer = member.id }, label = { Text(member.username) }) }
+            FilterChip(selected = month == "all", onClick = { month = "all" }, label = { Text("Any month") })
+            expenses.map { monthKey(it.createdAt) }.distinct().sortedDescending().forEach { value ->
+                FilterChip(selected = month == value, onClick = { month = value }, label = { Text(value) })
+            }
+        }
+        OutlinedTextField(minimum, { value -> if (value.matches(Regex("\\d{0,9}([.]\\d{0,2})?"))) minimum = value },
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), label = { Text("Minimum amount") }, singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal))
         val byDay = filtered.groupBy { dayLabel(it.createdAt) }
         if (filtered.isEmpty()) { EmptyState("No matching expenses."); return@Column }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
