@@ -138,6 +138,8 @@ class ExpenseSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'paid_details': 'Paid amounts must equal the expense amount.'})
             if len({item.get('user_id') for item in paid_details}) != len(paid_details):
                 raise serializers.ValidationError({'paid_details': 'Users must be unique.'})
+            if not {item.get('user_id') for item in paid_details}.issubset(member_ids):
+                raise serializers.ValidationError({'paid_details': 'All payers must belong to the group.'})
         for field in ('paid_by', 'split_on'):
             role = ExpenseParticipant.PAID if field == 'paid_by' else ExpenseParticipant.SPLIT
             if field == 'split_on' and details:

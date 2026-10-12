@@ -40,3 +40,16 @@ class ExpenseCacheTests(APITestCase):
                          status.HTTP_204_NO_CONTENT)
 
         self.assertEqual(self.client.get('/expense/').data, [])
+
+    def test_multiple_payer_amounts_are_returned(self):
+        self.client.force_authenticate(self.owner)
+        response = self.client.post('/expense/', {
+            'name': 'Shared dinner', 'amount': '100.00', 'paid_by': [self.owner.pk, self.member.pk],
+            'paid_details': [{'user_id': self.owner.pk, 'amount': '40.00'},
+                             {'user_id': self.member.pk, 'amount': '60.00'}],
+            'split_on': [self.owner.pk, self.member.pk], 'group_id': self.group.pk,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual([(row['user_id'], str(row['amount'])) for row in response.data['paid_details']], [
+            (self.owner.pk, '40.00'), (self.member.pk, '60.00'),
+        ])
