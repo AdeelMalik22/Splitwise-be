@@ -61,6 +61,7 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
     val c = MaterialTheme.split
     var name by rememberSaveable { mutableStateOf(existing?.name.orEmpty()) }
     var description by rememberSaveable { mutableStateOf(existing?.description.orEmpty()) }
+    var category by rememberSaveable { mutableStateOf(existing?.category ?: "other") }
     var amount by rememberSaveable { mutableStateOf(existing?.amount?.toMoney()?.stripTrailingZeros()?.toPlainString().orEmpty()) }
     var payers by rememberSaveable { mutableStateOf(existing?.paidBy?.toSet() ?: setOfNotNull(userId)) }
     val paidValues = remember { mutableStateMapOf<Int, String>().apply { existing?.paidDetails?.forEach { put(it.userId, it.amount) } } }
@@ -79,11 +80,15 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
             existing?.splitDetails?.forEach { d -> (d.amount ?: d.percentage)?.let { put(d.userId, it.toMoney().stripTrailingZeros().toPlainString()) } }
         }
     }
+    LaunchedEffect(existing?.id) {
+        existing?.splitDetails?.forEach { d -> (d.amount ?: d.percentage)?.let { values[d.userId] = it.toMoney().stripTrailingZeros().toPlainString() } }
+        existing?.paidDetails?.forEach { paidValues[it.userId] = it.amount.toMoney().stripTrailingZeros().toPlainString() }
+    }
     val splitMode = SplitMode.valueOf(mode)
 
     NavBar(if (existing != null) "Edit Expense" else "Add Expense", onBack) {
         val members = (state.members as? Load.Ready)?.data.orEmpty()
-        SmallButton("Save", { vm.save(name, description, amount, payers.firstOrNull(), SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap(), payers, paidValues.toMap())) })
+        SmallButton("Save", { vm.save(name, description, amount, payers.firstOrNull(), SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap(), payers, paidValues.toMap()), category) })
     }
     if (groups.isEmpty() && existing == null) return EmptyState("Create a group first, then add expenses to it.")
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -100,6 +105,12 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
         state.error?.let { ErrorBanner(it) }
         IconField(name, { name = it }, "Expense name", Icons.Default.Receipt)
         IconField(description, { description = it }, "Description (optional)", Icons.Default.Notes)
+        Text("Category", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("food" to "Food", "travel" to "Travel", "rent" to "Rent", "entertainment" to "Fun", "other" to "Other").forEach { (v, label) ->
+                SelectChip(label, category == v) { category = v }
+            }
+        }
 
         if (existing == null) {
             Text("Group", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium))
@@ -184,7 +195,7 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
         }
         PrimaryButton(if (existing != null) "Save changes" else "Save expense", {
             val members = (state.members as? Load.Ready)?.data.orEmpty()
-            vm.save(name, description, amount, payers.firstOrNull(), SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap(), payers, paidValues.toMap()))
+            vm.save(name, description, amount, payers.firstOrNull(), SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap(), payers, paidValues.toMap()), category)
         }, busy = state.busy)
         Spacer(Modifier.height(16.dp))
     }

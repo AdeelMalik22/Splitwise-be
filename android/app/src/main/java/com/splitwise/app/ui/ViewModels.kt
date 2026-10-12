@@ -477,7 +477,7 @@ class AddExpenseViewModel(private val repo: Repository) : ViewModel() {
         }
     }
 
-    fun save(name: String, description: String, amountText: String, paidBy: Int?, split: SplitInput) {
+    fun save(name: String, description: String, amountText: String, paidBy: Int?, split: SplitInput, category: String = "other") {
         val amount = amountText.trim().toBigDecimalOrNull()?.setScale(2, java.math.RoundingMode.HALF_UP)
         val groupId = _state.value.groupId
         val shares = split.members.associateWith { split.values[it]?.trim()?.toBigDecimalOrNull() }
@@ -503,6 +503,7 @@ class AddExpenseViewModel(private val repo: Repository) : ViewModel() {
 
         val request = ExpenseRequest(
             name = name.trim(), description = description.trim(), amount = amount!!.toPlainString(),
+            category = category,
             paidBy = split.payers.toList(), groupId = groupId!!,
             paidDetails = split.payers.takeIf { it.size > 1 }?.map { PaidDetail(it, split.paidValues[it]!!.trim()) },
             splitOn = if (split.mode == SplitMode.Equal) split.members.toList() else null,

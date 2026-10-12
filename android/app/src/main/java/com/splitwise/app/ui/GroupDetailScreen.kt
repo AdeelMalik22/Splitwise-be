@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -226,7 +228,22 @@ private fun Stat(label: String, value: String, color: Color, modifier: Modifier)
 private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId: Int?, onOpen: (Expense) -> Unit) {
     if (expenses.isEmpty()) return EmptyState("No expenses yet. Tap + to add one.")
     val c = MaterialTheme.split
-    val byDay = expenses.groupBy { dayLabel(it.createdAt) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("all") }
+    val filtered = expenses.filter { e ->
+        (query.isBlank() || e.name.contains(query, true) || e.description.contains(query, true)) &&
+            (category == "all" || e.category == category)
+    }
+    Column {
+        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            label = { Text("Search expenses") }, singleLine = true)
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("all" to "All", "food" to "Food", "travel" to "Travel", "rent" to "Rent", "entertainment" to "Fun", "other" to "Other").forEach { (value, label) ->
+                FilterChip(selected = category == value, onClick = { category = value }, label = { Text(label) })
+            }
+        }
+        val byDay = filtered.groupBy { dayLabel(it.createdAt) }
+        if (filtered.isEmpty()) { EmptyState("No matching expenses."); return@Column }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
         byDay.forEach { (day, list) ->
             item(key = "d$day") { Text(day, Modifier.padding(16.dp, 14.dp, 16.dp, 6.dp), color = c.fg2, style = MaterialTheme.typography.titleSmall) }
@@ -253,6 +270,7 @@ private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId
                 }
             }
         }
+    }
     }
 }
 

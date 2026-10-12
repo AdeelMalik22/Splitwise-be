@@ -18,6 +18,7 @@ class User(AbstractUser):
     password = models.CharField(max_length=255)
     email_verified = models.BooleanField(default=False)
     avatar = models.ImageField(upload_to=RandomName('avatars'), null=True, blank=True)
+    session_version = models.PositiveIntegerField(default=0)
 
     def save(self, *args, **kwargs):
         if self.is_superuser:

@@ -61,6 +61,7 @@ data class Expense(
     val id: Int,
     val name: String,
     val description: String = "",
+    val category: String = "other",
     @Serializable(with = MoneySerializer::class) val amount: String,
     @SerialName("paid_by") val paidBy: List<Int> = emptyList(),
     @SerialName("paid_details") val paidDetails: List<PaidDetail> = emptyList(),
@@ -79,6 +80,7 @@ data class Expense(
 data class ExpenseRequest(
     val name: String,
     val description: String,
+    val category: String = "other",
     val amount: String,
     @SerialName("paid_by") val paidBy: List<Int>,
     @SerialName("paid_details") val paidDetails: List<PaidDetail>? = null,
@@ -86,6 +88,11 @@ data class ExpenseRequest(
     @SerialName("split_details") val splitDetails: List<SplitShare>? = null,
     @SerialName("group_id") val groupId: Int,
 )
+
+@Serializable data class ExpenseReport(@SerialName("by_category") val byCategory: List<CategoryTotal> = emptyList(), val monthly: List<MonthTotal> = emptyList())
+@Serializable data class CategoryTotal(val category: String, val total: String)
+@Serializable data class MonthTotal(val month: String? = null, val total: String)
+@Serializable data class SettlementSuggestion(@SerialName("from_user") val fromUser: Int, @SerialName("to_user") val toUser: Int, val amount: String)
 
 @Serializable
 data class OwedLine(

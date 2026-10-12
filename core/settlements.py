@@ -85,6 +85,24 @@ def get_settlements_for_group(expenses, user_id, payments=()):
     return response
 
 
+def minimize_settlements(expenses, payments=()):
+    """Return a small set of transfers that settles the group's net balances."""
+    users = sorted({uid for e in expenses for uid in (e.get('paid_by') or []) + (e.get('split_on') or [])})
+    nets = {uid: sum((net_balances(expenses, uid, payments).values()), Decimal('0')) for uid in users}
+    creditors = [[uid, amount.quantize(Decimal('0.01'))] for uid, amount in nets.items() if amount > 0]
+    debtors = [[uid, (-amount).quantize(Decimal('0.01'))] for uid, amount in nets.items() if amount < 0]
+    transfers = []
+    while debtors and creditors:
+        debtor, owed = debtors[0]
+        creditor, credit = creditors[0]
+        amount = min(owed, credit).quantize(Decimal('0.01'))
+        transfers.append({'from_user': debtor, 'to_user': creditor, 'amount': amount})
+        debtors[0][1] -= amount; creditors[0][1] -= amount
+        if debtors[0][1] <= 0: debtors.pop(0)
+        if creditors[0][1] <= 0: creditors.pop(0)
+    return transfers
+
+
 def group_expense_data(group_id):
     """Expenses of a group in the shape the settlement maths expects."""
     from core.models import Expense, ExpenseParticipant

@@ -40,7 +40,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Expense
-        fields = ('id', 'name', 'description', 'amount', 'paid_by', 'paid_details', 'split_on', 'split_details',
+        fields = ('id', 'name', 'description', 'category', 'amount', 'paid_by', 'paid_details', 'split_on', 'split_details',
                   'group_id', 'created_at', 'updated_at')
 
     def to_representation(self, instance):

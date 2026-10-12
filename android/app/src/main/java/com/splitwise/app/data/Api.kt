@@ -33,11 +33,13 @@ interface SplitwiseApi {
     @GET("usersgroup/{groupId}/users/") suspend fun members(@Path("groupId") groupId: Int): List<Member>
 
     // The list endpoint returns every expense visible to the user as a plain array.
-    @GET("expense/") suspend fun expenses(): List<Expense>
+    @GET("expense/") suspend fun expenses(@Query("q") query: String? = null, @Query("category") category: String? = null, @Query("month") month: String? = null, @Query("payer") payer: Int? = null): List<Expense>
+    @GET("expense/report/") suspend fun expenseReport(): ExpenseReport
     @POST("expense/") suspend fun createExpense(@Body body: ExpenseRequest): Expense
     @GET("expense/{id}/") suspend fun expense(@Path("id") id: Int): Expense
     @PATCH("expense/{id}/") suspend fun updateExpense(@Path("id") id: Int, @Body body: ExpenseRequest): Expense
     @GET("expense/{groupId}/settlements/") suspend fun settlements(@Path("groupId") groupId: Int): Settlements
+    @GET("expense/settlement-suggestions/") suspend fun settlementSuggestions(@Query("group") groupId: Int): List<SettlementSuggestion>
 
     @DELETE("expense/{id}/") suspend fun deleteExpense(@Path("id") id: Int)
 

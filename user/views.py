@@ -141,8 +141,15 @@ class UserVietSet(viewsets.ModelViewSet):
         serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         request.user.set_password(serializer.validated_data['new_password'])
-        request.user.save(update_fields=('password',))
+        request.user.session_version += 1
+        request.user.save(update_fields=('password', 'session_version'))
         return Response({'detail': 'Password updated.'})
+
+    @action(detail=False, methods=['post'], url_path='logout_all')
+    def logout_all(self, request):
+        request.user.session_version += 1
+        request.user.save(update_fields=('session_version',))
+        return Response({'detail': 'All other sessions have been signed out.'})
 
     @action(detail=False, methods=['post'], url_path='delete_account')
     def delete_account(self, request):

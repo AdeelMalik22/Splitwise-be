@@ -1,5 +1,7 @@
 from django.core.cache import cache
 from django.db.models import Q
+from django.db.models.functions import TruncMonth
+from django.db.models import Sum
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -14,7 +16,7 @@ from core.images import clean_image
 from core.activity_serializers import ActivitySerializer
 from django.utils import timezone
 from core.serializers import GroupSerializer, UserGroupSerializer, ExpenseSerializer
-from core.settlements import get_settlements_for_group, group_expense_data, payment_rows
+from core.settlements import get_settlements_for_group, group_expense_data, payment_rows, minimize_settlements
 from user.models import User
 
 
@@ -147,7 +149,27 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Expense.objects.filter(group_id__usergroup__user_id=self.request.user.pk).select_related('group_id').prefetch_related('participants')
+        qs = Expense.objects.filter(group_id__usergroup__user_id=self.request.user.pk).select_related('group_id').prefetch_related('participants')
+        params = self.request.query_params
+        if params.get('q'):
+            qs = qs.filter(Q(name__icontains=params['q']) | Q(description__icontains=params['q']))
+        if params.get('category'):
+            qs = qs.filter(category=params['category'])
+        if params.get('month'):
+            qs = qs.filter(created_at__startswith=params['month'])
+        if params.get('min_amount'):
+            qs = qs.filter(amount__gte=params['min_amount'])
+        if params.get('max_amount'):
+            qs = qs.filter(amount__lte=params['max_amount'])
+        if params.get('payer'):
+            qs = qs.filter(participants__role=ExpenseParticipant.PAID, participants__user_id=params['payer'])
+        return qs.distinct()
+
+    @action(detail=False, methods=['get'])
+    def report(self, request):
+        rows = self.get_queryset().values('category').annotate(total=Sum('amount')).order_by('category')
+        monthly = self.get_queryset().annotate(month=TruncMonth('created_at')).values('month').annotate(total=Sum('amount')).order_by('month')
+        return Response({'by_category': list(rows), 'monthly': list(monthly)})
 
     @staticmethod
     def _invalidate_cache(group_id):
@@ -200,6 +222,14 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         settlements = get_settlements_for_group(
             expense_data, request.user.id, payment_rows(pk, [Payment.COMPLETED]))
         return Response(settlements,status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='settlement-suggestions')
+    def settlement_suggestions(self, request):
+        group_id = request.query_params.get('group')
+        if not group_id or not UserGroup.objects.filter(group_id=group_id, user_id=request.user.pk).exists():
+            return Response({'detail': 'A group you belong to is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        suggestions = minimize_settlements(group_expense_data(group_id), payment_rows(group_id, [Payment.COMPLETED]))
+        return Response(suggestions)
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
