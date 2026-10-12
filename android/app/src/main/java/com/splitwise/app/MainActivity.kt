@@ -166,6 +166,7 @@ private fun MainNav(session: SessionViewModel, isDark: Boolean, epoch: Int, pend
                     HomeScreen(
                         o, userId,
                         onOpenGroup = { nav.navigate("group/${it.id}?name=${android.net.Uri.encode(it.name)}") },
+                        onOpenAccount = { nav.navigate("account") { launchSingleTop = true } },
                         onOpenGroups = { nav.navigate("groups") },
                         onOpenInvites = { nav.navigate("invites") },
                         onOpenActivity = { nav.navigate("activity") },

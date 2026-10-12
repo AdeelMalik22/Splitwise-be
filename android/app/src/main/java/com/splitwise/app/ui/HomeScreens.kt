@@ -26,7 +26,7 @@ import java.math.BigDecimal
 // ───────────────────────── Home ─────────────────────────
 
 @Composable
-fun HomeScreen(overview: Overview, userId: Int?, onOpenGroup: (Group) -> Unit, onOpenGroups: () -> Unit, onOpenInvites: () -> Unit, onOpenActivity: () -> Unit, onRespond: (com.splitwise.app.data.Invite, Boolean) -> Unit, onCreateGroup: () -> Unit, onSettleUp: () -> Unit, onConfirmPayment: (com.splitwise.app.data.Payment) -> Unit) {
+fun HomeScreen(overview: Overview, userId: Int?, onOpenGroup: (Group) -> Unit, onOpenGroups: () -> Unit, onOpenInvites: () -> Unit, onOpenActivity: () -> Unit, onOpenAccount: () -> Unit, onRespond: (com.splitwise.app.data.Invite, Boolean) -> Unit, onCreateGroup: () -> Unit, onSettleUp: () -> Unit, onConfirmPayment: (com.splitwise.app.data.Payment) -> Unit) {
     val me = overview.me
     val pending = overview.pendingFor(userId)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -36,7 +36,7 @@ fun HomeScreen(overview: Overview, userId: Int?, onOpenGroup: (Group) -> Unit, o
                     Text(if (overview.groups.isEmpty()) "Welcome," else "Hello,", color = MaterialTheme.split.fg2, style = MaterialTheme.typography.bodySmall)
                     Text(me?.name?.ifBlank { null }?.substringBefore(' ') ?: me?.username ?: "there", style = MaterialTheme.typography.headlineSmall)
                 }
-                if (me != null) Avatar(initials(me.name, me.username), me.id, 40.dp, imageUrl = me.avatar)
+                if (me != null) Avatar(initials(me.name, me.username), me.id, 40.dp, modifier = Modifier.clickable(onClick = onOpenAccount), imageUrl = me.avatar)
             }
         }
         if (overview.groups.isEmpty()) {

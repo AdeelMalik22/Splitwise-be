@@ -472,8 +472,6 @@ fun AccountScreen(
             Divider16()
             NavRow("Change Password", "Update your password", onChangePassword)
             Divider16()
-            NavRow("Log out all devices", "Revoke other active sessions", onLogoutAll, danger = true)
-            Divider16()
             NavRow("Payment History", "Payments you sent and received", onPayments)
             Divider16()
             NavRow("Spending reports", "Monthly totals by category", onReports)
@@ -481,6 +479,8 @@ fun AccountScreen(
         SectionHeader("Danger Zone")
         SplitCard(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
             NavRow("Log Out", null, { confirmLogout = true }, danger = true)
+            Divider16()
+            NavRow("Log out all devices", "Revoke other active sessions", onLogoutAll, danger = true)
             Divider16()
             NavRow("Delete Account", "Permanently remove your data", { confirmDelete = true }, danger = true)
         }
