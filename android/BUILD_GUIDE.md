@@ -20,10 +20,22 @@ The APK is created at:
 app/build/outputs/apk/release/app-release.apk
 ```
 
+To place a copy in the repository root for sharing:
+
+```bash
+cp app/build/outputs/apk/release/app-release.apk ../splitease-release.apk
+```
+
 Install it on a connected Android phone with:
 
 ```bash
 adb install -r app/build/outputs/apk/release/app-release.apk
+```
+
+Or install the root copy from the repository root:
+
+```bash
+adb install -r splitease-release.apk
 ```
 
 The phone must allow installation from the source used to share the APK.
@@ -62,3 +74,17 @@ The API URL is supplied at build time:
 
 Include the trailing slash because Retrofit requires the base URL to end with `/`.
 
+## Verification
+
+Run Android unit tests and a debug build with:
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug
+```
+
+For backend verification from the repository root:
+
+```bash
+python manage.py check
+DJANGO_TEST=true python manage.py test
+```

@@ -99,6 +99,9 @@ Use the returned `access` token for protected requests. Refresh it with `POST /l
 | GET/POST | `/expense/` | List or create expenses in your groups |
 | GET/PATCH/DELETE | `/expense/{id}/` | Manage an expense in your groups |
 | GET | `/expense/{group_id}/settlements/` | Calculate group settlements |
+| GET | `/expense/report/` | Monthly and category spending totals |
+| GET | `/expense/settlement-suggestions/?group={id}` | Minimized transfers for a group |
+| POST | `/users/logout_all/` | Revoke all existing JWT sessions for the account |
 | GET | `/users/{id}/groups/` | List groups for your own user ID |
 | GET | `/usersgroup/{group_id}/users/` | List users in one of your groups |
 | GET | `/health/` | Check database and cache readiness |
@@ -109,12 +112,34 @@ The exact expense payload uses `amount`, `paid_by`, `split_on`, and `group_id`, 
 {
   "name": "Dinner",
   "description": "Shared dinner",
+  "category": "food",
   "amount": 120.00,
   "paid_by": [1],
   "split_on": [1, 2],
   "group_id": 1
 }
 ```
+
+Expenses support the categories `food`, `travel`, `rent`, `entertainment`, and
+`other`. Multiple payers can send `paid_details`, for example:
+
+```json
+"paid_by": [1, 2],
+"paid_details": [
+  {"user_id": 1, "amount": "200.00"},
+  {"user_id": 2, "amount": "400.00"}
+]
+```
+
+Expense lists accept `q`, `category`, `month` (`YYYY-MM`), `payer`,
+`min_amount`, and `max_amount` query parameters.
+
+## Security and sessions
+
+JWT access tokens include a per-user session version. Changing a password or
+using `POST /users/logout_all/` revokes previously issued sessions. The Android
+client also provides local logout, fingerprint login, and a danger-zone action
+for logging out other devices.
 
 ## Postman
 
@@ -132,6 +157,11 @@ documented in [`DEPLOYMENT.md`](DEPLOYMENT.md).
 Every push to `main` and every pull request runs the Django checks, migrations,
 and tests in GitHub Actions against PostgreSQL and Redis.
 
-## Remaining domain work
+## Testing
 
-The deployment settings, environment configuration, rate limiting, health endpoint, participant validation, relational expense participants, and CI checks are in place. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the production runbook. Remaining work is expanding integration tests around all API workflows and completing the production deployment configuration.
+Run the full backend suite with `python manage.py test`. The Android unit suite
+is run from `android/` with `./gradlew :app:testDebugUnitTest`.
+
+The test coverage includes participant validation, multiple payer amounts,
+expense filtering, settlement minimization, cache isolation, session
+revocation, and the Android offline write queue.

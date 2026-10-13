@@ -12,8 +12,18 @@ Native Android client (Kotlin, Jetpack Compose, Material 3) for the Django API i
 
 ## Features
 
-Register / sign in, groups, group detail (expenses, balances from `/expense/<id>/settlements/`, members),
-add equal-split expense, invite users by username, accept/decline invites, notifications.
+Register / sign in, groups, group detail, multiple-payer expenses, categories,
+search and expense filters, balances, settlement suggestions, monthly and
+category reports, invites, notifications, profile editing, fingerprint login,
+offline reads, and queued offline expense/payment writes.
+
+On the Home screen, tap the profile avatar to open Account. Account contains
+profile settings, reports, password changes, local logout, and the Danger Zone
+with “Log out all devices”.
+
+Expense filters are shown above the expense list. The list scrolls separately
+from the filter controls. Category filters can be hidden with “Hide category”
+and restored with “Show category”.
 
 ## Run
 
@@ -24,3 +34,12 @@ add equal-split expense, invite users by username, accept/decline invites, notif
 
 For a physical device or a deployment, change `API_BASE_URL` in `app/build.gradle.kts`
 (release builds must use HTTPS; cleartext is only enabled for debug).
+
+## Local caching and offline writes
+
+Room stores user-scoped groups, expenses, members, balances, notifications,
+activity, invites, payments, and overview data. Cached data is shown while the
+backend refreshes in the background. New expenses and payments created without
+network access are stored in a user-scoped Room queue and replayed after the
+next authenticated refresh. Logging out clears that user's cached data and
+pending writes.
