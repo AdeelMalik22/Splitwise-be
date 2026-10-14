@@ -441,7 +441,7 @@ class GroupDetailViewModel(private val repo: Repository, private val groupId: In
 enum class SplitMode { Equal, Exact, Percent }
 
 /** [values] holds the typed amount or percentage per member; ignored for equal splits. */
-data class SplitInput(val mode: SplitMode, val members: Set<Int>, val values: Map<Int, String>, val payers: Set<Int>, val paidValues: Map<Int, String>)
+data class SplitInput(val mode: SplitMode, val members: Set<Int>, val values: Map<Int, String>, val payers: Set<Int>, val paidValues: Map<Int, String>, val fundedBy: Map<Int, Int?> = emptyMap())
 
 class AddExpenseViewModel(private val repo: Repository) : ViewModel() {
     data class State(
@@ -510,8 +510,8 @@ class AddExpenseViewModel(private val repo: Repository) : ViewModel() {
             splitOn = if (split.mode == SplitMode.Equal) split.members.toList() else null,
             splitDetails = when (split.mode) {
                 SplitMode.Equal -> null
-                SplitMode.Exact -> shares.map { (id, v) -> SplitShare(id, amount = v!!.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()) }
-                SplitMode.Percent -> shares.map { (id, v) -> SplitShare(id, percentage = v!!.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString()) }
+                SplitMode.Exact -> shares.map { (id, v) -> SplitShare(id, amount = v!!.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString(), fundedBy = split.fundedBy[id]) }
+                SplitMode.Percent -> shares.map { (id, v) -> SplitShare(id, percentage = v!!.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString(), fundedBy = split.fundedBy[id]) }
             },
         )
         viewModelScope.launch {

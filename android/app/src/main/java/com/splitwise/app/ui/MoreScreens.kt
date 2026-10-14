@@ -80,6 +80,7 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
             existing?.splitDetails?.forEach { d -> (d.amount ?: d.percentage)?.let { put(d.userId, it.toMoney().stripTrailingZeros().toPlainString()) } }
         }
     }
+    val fundedBy = remember { mutableStateMapOf<Int, Int?>().apply { existing?.splitDetails?.forEach { put(it.userId, it.fundedBy) } } }
     LaunchedEffect(existing?.id) {
         existing?.splitDetails?.forEach { d -> (d.amount ?: d.percentage)?.let { values[d.userId] = it.toMoney().stripTrailingZeros().toPlainString() } }
         existing?.paidDetails?.forEach { paidValues[it.userId] = it.amount.toMoney().stripTrailingZeros().toPlainString() }
@@ -88,7 +89,7 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
 
     NavBar(if (existing != null) "Edit Expense" else "Add Expense", onBack) {
         val members = (state.members as? Load.Ready)?.data.orEmpty()
-        SmallButton("Save", { vm.save(name, description, amount, payers.firstOrNull(), SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap(), payers, paidValues.toMap()), category) })
+        SmallButton("Save", { vm.save(name, description, amount, payers.firstOrNull(), SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap(), payers, paidValues.toMap(), fundedBy.toMap()), category) })
     }
     if (groups.isEmpty() && existing == null) return EmptyState("Create a group first, then add expenses to it.")
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -190,6 +191,17 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
                                 )
                             }
                         }
+                        Row(
+                            Modifier.fillMaxWidth().padding(start = 60.dp, end = 16.dp, bottom = 6.dp)
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text("Paid from", style = MaterialTheme.typography.labelSmall, color = c.fg2)
+                            SelectChip("Personal", fundedBy[m.id] == null) { fundedBy[m.id] = null }
+                            members.filter { it.id != m.id }.forEach { source ->
+                                SelectChip("${source.username}'s funds", fundedBy[m.id] == source.id) { fundedBy[m.id] = source.id }
+                            }
+                        }
                     }
                     Spacer(Modifier.height(6.dp))
                 }
@@ -197,7 +209,7 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
         }
         PrimaryButton(if (existing != null) "Save changes" else "Save expense", {
             val members = (state.members as? Load.Ready)?.data.orEmpty()
-            vm.save(name, description, amount, payers.firstOrNull(), SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap(), payers, paidValues.toMap()), category)
+            vm.save(name, description, amount, payers.firstOrNull(), SplitInput(splitMode, (splitOn ?: members.map { it.id }).toSet(), values.toMap(), payers, paidValues.toMap(), fundedBy.toMap()), category)
         }, busy = state.busy)
         Spacer(Modifier.height(16.dp))
     }
