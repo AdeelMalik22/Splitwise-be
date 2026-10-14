@@ -180,7 +180,9 @@ private fun ExpenseForm(vm: AddExpenseViewModel, state: AddExpenseViewModel.Stat
                             } else {
                                 OutlinedTextField(
                                     values[m.id].orEmpty(), { v -> if (v.matches(Regex("""\d{0,9}([.]\d{0,2})?"""))) values[m.id] = v },
-                                    singleLine = true, modifier = Modifier.width(110.dp), shape = RoundedCornerShape(10.dp),
+                                    singleLine = true,
+                                    modifier = Modifier.widthIn(min = 88.dp, max = 132.dp),
+                                    shape = RoundedCornerShape(10.dp),
                                     suffix = { if (splitMode == SplitMode.Percent) Text("%") },
                                     prefix = { if (splitMode == SplitMode.Exact) Text(activeCurrency.prefix) },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),

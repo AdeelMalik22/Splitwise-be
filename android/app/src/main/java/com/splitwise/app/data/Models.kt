@@ -54,6 +54,7 @@ data class SplitDetail(
     @SerialName("user_id") val userId: Int,
     @Serializable(with = NullableMoneySerializer::class) val amount: String? = null,
     @Serializable(with = NullableMoneySerializer::class) val percentage: String? = null,
+    @SerialName("funded_by") val fundedBy: Int? = null,
 )
 
 @Serializable
@@ -73,7 +74,7 @@ data class Expense(
 
 @Serializable data class PaidDetail(@SerialName("user_id") val userId: Int, @Serializable(with = MoneySerializer::class) val amount: String)
 
-@Serializable data class SplitShare(@SerialName("user_id") val userId: Int, val amount: String? = null, val percentage: String? = null)
+@Serializable data class SplitShare(@SerialName("user_id") val userId: Int, val amount: String? = null, val percentage: String? = null, @SerialName("funded_by") val fundedBy: Int? = null)
 
 /** Either [splitOn] (equal split) or [splitDetails] (exact amounts / percentages) is sent. */
 @Serializable

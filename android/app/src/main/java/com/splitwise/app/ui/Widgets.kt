@@ -279,9 +279,9 @@ fun SkeletonList(modifier: Modifier = Modifier, rows: Int = 5) {
         repeat(rows) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(block.copy(alpha = alpha)))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.width(180.dp).height(12.dp).clip(RoundedCornerShape(6.dp)).background(block.copy(alpha = alpha)))
-                    Box(Modifier.width(100.dp).height(10.dp).clip(RoundedCornerShape(6.dp)).background(block.copy(alpha = alpha)))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.fillMaxWidth(0.72f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(block.copy(alpha = alpha)))
+                    Box(Modifier.fillMaxWidth(0.42f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(block.copy(alpha = alpha)))
                 }
             }
         }

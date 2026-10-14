@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation
 from rest_framework import serializers
 
 from user.models import GroupInvite
-from core.models import Group, UserGroup, Expense, ExpenseParticipant
+from core.models import Group, UserGroup, Expense, ExpenseParticipant, ManagedFund
 
 
 class GroupSerializer(serializers.ModelSerializer):
@@ -53,7 +53,8 @@ class ExpenseSerializer(serializers.ModelSerializer):
         ]
         data['split_on'] = [p.user_id for p in participants if p.role == ExpenseParticipant.SPLIT]
         data['split_details'] = [
-            {'user_id': p.user_id, 'amount': p.share_amount, 'percentage': p.share_percentage}
+            {'user_id': p.user_id, 'amount': p.share_amount, 'percentage': p.share_percentage,
+             'funded_by': p.funded_by_id}
             for p in participants if p.role == ExpenseParticipant.SPLIT
             and (p.share_amount is not None or p.share_percentage is not None)
         ]
@@ -81,7 +82,8 @@ class ExpenseSerializer(serializers.ModelSerializer):
             expense.participants.filter(role=ExpenseParticipant.SPLIT).delete()
             ExpenseParticipant.objects.bulk_create([
                 ExpenseParticipant(expense=expense, user_id=item['user_id'], role=ExpenseParticipant.SPLIT,
-                                   share_amount=item.get('amount'), share_percentage=item.get('percentage'))
+                                   share_amount=item.get('amount'), share_percentage=item.get('percentage'),
+                                   funded_by_id=item.get('funded_by'))
                 for item in split_details
             ])
         return expense
@@ -104,7 +106,8 @@ class ExpenseSerializer(serializers.ModelSerializer):
             instance.participants.filter(role=ExpenseParticipant.SPLIT).delete()
             ExpenseParticipant.objects.bulk_create([
                 ExpenseParticipant(expense=instance, user_id=item['user_id'], role=ExpenseParticipant.SPLIT,
-                                   share_amount=item.get('amount'), share_percentage=item.get('percentage'))
+                                   share_amount=item.get('amount'), share_percentage=item.get('percentage'),
+                                   funded_by_id=item.get('funded_by'))
                 for item in split_details
             ])
         if paid_details is not None:

@@ -93,10 +93,18 @@ fun GroupDetailScreen(
             val expenses = (state.expenses as? Load.Ready)?.data.orEmpty()
             val settlements = (state.settlements as? Load.Ready)?.data
             GroupHeader(emoji, imageUrl, title, members, expenses, settlements, onOpenSettleHub, userId)
-            TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = MaterialTheme.colorScheme.primary) {
-                listOf("Expenses", "Balances", "Members").forEachIndexed { i, label ->
-                    Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label, style = MaterialTheme.typography.titleSmall) },
-                        selectedContentColor = MaterialTheme.colorScheme.primary, unselectedContentColor = MaterialTheme.split.fg3)
+            Surface(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)) {
+                Row(Modifier.padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("Expenses" to expenses.size, "Balances" to ((settlements?.youOwe?.size ?: 0) + (settlements?.owedToYou?.size ?: 0)), "Members" to members.size).forEachIndexed { i, (label, count) ->
+                        val selected = tab == i
+                        Surface(Modifier.weight(1f).clickable { tab = i }, shape = RoundedCornerShape(10.dp), color = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent) {
+                            Column(Modifier.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(label, style = MaterialTheme.typography.labelLarge, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.split.fg2)
+                                Text(count.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.split.fg3)
+                            }
+                        }
+                    }
                 }
             }
             val names = members.associate { it.id to it }
@@ -228,52 +236,8 @@ private fun Stat(label: String, value: String, color: Color, modifier: Modifier)
 private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId: Int?, onOpen: (Expense) -> Unit) {
     if (expenses.isEmpty()) return EmptyState("No expenses yet. Tap + to add one.")
     val c = MaterialTheme.split
-    var query by rememberSaveable { mutableStateOf("") }
-    var category by rememberSaveable { mutableStateOf("all") }
-    var payer by rememberSaveable { mutableStateOf<Int?>(null) }
-    var month by rememberSaveable { mutableStateOf("all") }
-    var minimum by rememberSaveable { mutableStateOf("") }
-    var showFilters by rememberSaveable { mutableStateOf(true) }
-    var showCategories by rememberSaveable { mutableStateOf(true) }
-    val filtered = expenses.filter { e ->
-        (query.isBlank() || e.name.contains(query, true) || e.description.contains(query, true)) &&
-            (category == "all" || e.category == category) &&
-            (payer == null || payer in e.paidBy) &&
-            (month == "all" || monthKey(e.createdAt) == month) &&
-            (minimum.toBigDecimalOrNull()?.let { e.amount.toMoney() >= it } != false)
-    }
-    Column {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(query, { query = it }, Modifier.weight(1f), label = { Text("Search expenses") }, singleLine = true)
-            TextButton(onClick = { showFilters = !showFilters }) { Text(if (showFilters) "Hide filters" else "Filters") }
-        }
-        if (showFilters && showCategories) {
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("all" to "All", "food" to "Food", "travel" to "Travel", "rent" to "Rent", "entertainment" to "Fun", "other" to "Other").forEach { (value, label) ->
-                    FilterChip(selected = category == value, onClick = { category = value }, label = { Text(label) })
-                }
-                TextButton(onClick = { showCategories = false }) { Text("Hide category") }
-            }
-        }
-        if (showFilters) {
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = payer == null, onClick = { payer = null }, label = { Text("Any payer") })
-                names.values.forEach { member -> FilterChip(selected = payer == member.id, onClick = { payer = member.id }, label = { Text(member.username) }) }
-                FilterChip(selected = month == "all", onClick = { month = "all" }, label = { Text("Any month") })
-                expenses.map { monthKey(it.createdAt) }.distinct().sortedDescending().forEach { value ->
-                    FilterChip(selected = month == value, onClick = { month = value }, label = { Text(value) })
-                }
-            }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(minimum, { value -> if (value.matches(Regex("\\d{0,9}([.]\\d{0,2})?"))) minimum = value },
-                    Modifier.weight(1f), label = { Text("Minimum amount") }, singleLine = true,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal))
-                if (!showCategories) TextButton(onClick = { showCategories = true }) { Text("Show category") }
-            }
-        }
-        val byDay = filtered.groupBy { dayLabel(it.createdAt) }
-        if (filtered.isEmpty()) { EmptyState("No matching expenses."); return@Column }
-    LazyColumn(Modifier.fillMaxWidth().weight(1f), contentPadding = PaddingValues(bottom = 96.dp)) {
+    val byDay = expenses.groupBy { dayLabel(it.createdAt) }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
         byDay.forEach { (day, list) ->
             item(key = "d$day") { Text(day, Modifier.padding(16.dp, 14.dp, 16.dp, 6.dp), color = c.fg2, style = MaterialTheme.typography.titleSmall) }
             items(list, key = { it.id }) { e ->
@@ -299,7 +263,6 @@ private fun ExpensesTab(expenses: List<Expense>, names: Map<Int, Member>, userId
                 }
             }
         }
-    }
     }
 }
 

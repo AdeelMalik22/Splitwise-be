@@ -34,6 +34,15 @@ class UserGroup(models.Model):
         ]
 
 
+class ManagedFund(models.Model):
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='managed_funds_owned')
+    manager = models.ForeignKey(User, on_delete=models.CASCADE, related_name='managed_funds_managed')
+    group = models.ForeignKey('Group', on_delete=models.CASCADE, related_name='managed_funds')
+    label = models.CharField(max_length=100, default='Managed funds')
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 
 class Expense(models.Model):
     CATEGORY_CHOICES = (
@@ -68,6 +77,7 @@ class ExpenseParticipant(models.Model):
     role = models.CharField(max_length=5, choices=ROLE_CHOICES)
     share_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     share_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    funded_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='funded_expense_shares')
 
     class Meta:
         constraints = [
